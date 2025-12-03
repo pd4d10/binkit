@@ -1,0 +1,24 @@
+{
+  "name": "@binkit/generator",
+  "version": "0.1.0",
+  "private": true,
+  "description": "BinKit generator for creating cross-platform native CLI packages",
+  "type": "module",
+  "bin": {
+    "binkit": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "clean": "rm -rf dist"
+  },
+  "keywords": [
+    "binkit",
+    "generator",
+    "cli"
+  ],
+  "author": "Rongjian Zhang <pd4d10@gmail.com>",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^22.10.1"
+  }
+}

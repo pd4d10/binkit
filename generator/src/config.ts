@@ -1,4 +1,17 @@
-import type { PlatformId } from './platform.js'
+import fs from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+
+// Read package.json to get author and license
+const pkgPath = path.join(__dirname, '..', '..', 'package.json')
+const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'))
+
+export const AUTHOR: string = pkg.author;
+export const LICENSE: string = pkg.license;
+
+type PlatformId = string
 
 /**
  * Configuration for a specific platform package

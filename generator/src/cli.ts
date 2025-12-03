@@ -41,8 +41,7 @@ function showHelp() {
   console.log('  1. Run: binkit <tool-name> [version]')
   console.log('  2. Add real binaries to packages/<tool>-<platform>/bin/')
   console.log('  3. Add shared libraries to packages/<tool>-<platform>/lib/')
-  console.log('  4. Run: pnpm install && pnpm build')
-  console.log('  5. Publish: pnpm -r publish --filter "./packages/*"')
+  console.log('  4. Publish: pnpm -r publish --filter "./packages/*"')
 }
 
 async function main() {
@@ -69,8 +68,7 @@ async function main() {
   console.log('Next steps:')
   console.log(`  1. Add binaries to packages/${toolName}-<platform>/bin/`)
   console.log(`  2. Add libraries to packages/${toolName}-<platform>/lib/`)
-  console.log('  3. Run: pnpm install && pnpm build')
-  console.log('  4. Publish: pnpm -r publish --filter "./packages/*"')
+  console.log('  3. Publish: pnpm -r publish --filter "./packages/*"')
 }
 
 main().catch((error) => {

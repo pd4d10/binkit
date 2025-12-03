@@ -1,12 +1,13 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
-import type { ToolConfig } from './config.js'
+import type { ToolConfig, PlatformConfig } from './config.js'
 import {
   generateMainPackageJson,
-  generateMainIndexTs,
+  generateMainIndexJs,
+  generateMainIndexDts,
   generatePlatformPackageJson,
-  generatePlatformIndexTs,
-  generateTsConfig,
+  generatePlatformIndexJs,
+  generatePlatformIndexDts,
 } from './templates.js'
 
 export interface GenerateOptions {
@@ -27,6 +28,10 @@ export async function generateToolPackages(
 
   console.log(`Generating packages for ${config.toolName}...`)
 
+  // Ensure output directory and workspace files exist
+  await ensureDir(outputDir)
+  await generateWorkspaceFiles(outputDir, force)
+
   // Generate main package
   await generateMainPackage(config, outputDir, force)
 
@@ -36,6 +41,36 @@ export async function generateToolPackages(
   }
 
   console.log(`✓ Successfully generated packages for ${config.toolName}`)
+}
+
+/**
+ * Generate pnpm-workspace.yaml and package.json in the output directory
+ */
+async function generateWorkspaceFiles(
+  outputDir: string,
+  force: boolean
+): Promise<void> {
+  // Generate pnpm-workspace.yaml
+  await writeFile(
+    path.join(outputDir, 'pnpm-workspace.yaml'),
+    'packages:\n  - "*"\n',
+    force
+  )
+
+  // Generate minimal package.json
+  const pkg = {
+    name: 'binkit-packages',
+    version: '0.1.0',
+    private: true,
+    scripts: {
+      publish: 'pnpm -r publish --access public',
+    },
+  }
+  await writeFile(
+    path.join(outputDir, 'package.json'),
+    JSON.stringify(pkg, null, 2),
+    force
+  )
 }
 
 /**
@@ -50,8 +85,8 @@ async function generateMainPackage(
   const packageDir = path.join(outputDir, toolName)
 
   // Create directory structure
-  await ensureDir(packageDir, force)
-  await ensureDir(path.join(packageDir, 'src'), force)
+  await ensureDir(packageDir)
+  await ensureDir(path.join(packageDir, 'dist'))
 
   // Generate files
   await writeFile(
@@ -60,15 +95,16 @@ async function generateMainPackage(
     force
   )
 
+  // Write pre-compiled JavaScript and type definitions
   await writeFile(
-    path.join(packageDir, 'src', 'index.ts'),
-    generateMainIndexTs(config),
+    path.join(packageDir, 'dist', 'index.js'),
+    generateMainIndexJs(config),
     force
   )
 
   await writeFile(
-    path.join(packageDir, 'tsconfig.json'),
-    generateTsConfig(),
+    path.join(packageDir, 'dist', 'index.d.ts'),
+    generateMainIndexDts(config),
     force
   )
 
@@ -80,7 +116,7 @@ async function generateMainPackage(
  */
 async function generatePlatformPackage(
   config: ToolConfig,
-  platform: any,
+  platform: PlatformConfig,
   outputDir: string,
   force: boolean
 ): Promise<void> {
@@ -90,10 +126,10 @@ async function generatePlatformPackage(
   const packageDir = path.join(outputDir, packageName)
 
   // Create directory structure
-  await ensureDir(packageDir, force)
-  await ensureDir(path.join(packageDir, 'src'), force)
-  await ensureDir(path.join(packageDir, 'bin'), force)
-  await ensureDir(path.join(packageDir, 'lib'), force)
+  await ensureDir(packageDir)
+  await ensureDir(path.join(packageDir, 'dist'))
+  await ensureDir(path.join(packageDir, 'bin'))
+  await ensureDir(path.join(packageDir, 'lib'))
 
   // Generate files
   await writeFile(
@@ -102,15 +138,16 @@ async function generatePlatformPackage(
     force
   )
 
+  // Write pre-compiled JavaScript and type definitions
   await writeFile(
-    path.join(packageDir, 'src', 'index.ts'),
-    generatePlatformIndexTs(config, platform),
+    path.join(packageDir, 'dist', 'index.js'),
+    generatePlatformIndexJs(config, platform),
     force
   )
 
   await writeFile(
-    path.join(packageDir, 'tsconfig.json'),
-    generateTsConfig(),
+    path.join(packageDir, 'dist', 'index.d.ts'),
+    generatePlatformIndexDts(config, platform),
     force
   )
 
@@ -145,17 +182,7 @@ async function generatePlatformPackage(
 /**
  * Ensure a directory exists
  */
-async function ensureDir(dir: string, force: boolean): Promise<void> {
-  const exists = await fs
-    .access(dir)
-    .then(() => true)
-    .catch(() => false)
-
-  if (exists && !force) {
-    // Directory exists, that's fine
-    return
-  }
-
+async function ensureDir(dir: string): Promise<void> {
   await fs.mkdir(dir, { recursive: true })
 }
 
