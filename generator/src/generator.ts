@@ -9,12 +9,24 @@ import {
   generatePlatformIndexJs,
   generatePlatformIndexDts,
 } from './templates.js'
+import { downloadAndExtractPlatform } from './download.js'
 
 export interface GenerateOptions {
   /** Root directory where packages should be generated (default: './packages') */
   outputDir?: string
   /** Whether to overwrite existing files (default: false) */
   force?: boolean
+  /** Whether to download binaries (default: false) */
+  download?: boolean
+  /** Only download for the current platform (default: false) */
+  currentPlatformOnly?: boolean
+}
+
+/**
+ * Get the current platform identifier
+ */
+function getCurrentPlatform(): string {
+  return `${process.platform}-${process.arch}`
 }
 
 /**
@@ -24,7 +36,7 @@ export async function generateToolPackages(
   config: ToolConfig,
   options: GenerateOptions = {}
 ): Promise<void> {
-  const { outputDir = './packages', force = false } = options
+  const { outputDir = './packages', force = false, download = false, currentPlatformOnly = false } = options
 
   console.log(`Generating packages for ${config.toolName}...`)
 
@@ -35,9 +47,22 @@ export async function generateToolPackages(
   // Generate main package
   await generateMainPackage(config, outputDir, force)
 
+  const currentPlatform = getCurrentPlatform()
+
   // Generate platform packages
   for (const platform of config.platforms) {
+    // Skip platforms that don't match current if currentPlatformOnly is true
+    if (currentPlatformOnly && platform.platformId !== currentPlatform) {
+      continue
+    }
+
     await generatePlatformPackage(config, platform, outputDir, force)
+
+    // Download binaries if requested and download URL is configured
+    if (download && platform.download?.url) {
+      const packageDir = path.join(outputDir, `${config.toolName}-${platform.platformId}`)
+      await downloadAndExtractPlatform(config, platform, packageDir)
+    }
   }
 
   console.log(`✓ Successfully generated packages for ${config.toolName}`)
@@ -148,31 +173,6 @@ async function generatePlatformPackage(
   await writeFile(
     path.join(packageDir, 'dist', 'index.d.ts'),
     generatePlatformIndexDts(config, platform),
-    force
-  )
-
-  // Create placeholder binary
-  const extension = platform.platformId.startsWith('win32') ? '.exe' : ''
-  const binaryPath = path.join(packageDir, 'bin', `${toolName}${extension}`)
-  await writeFile(
-    binaryPath,
-    '#!/bin/sh\necho "This is a placeholder binary for ' +
-      toolName +
-      ' on ' +
-      platform.platformId +
-      '"\n',
-    force
-  )
-
-  // Make binary executable on Unix-like systems
-  if (!platform.platformId.startsWith('win32')) {
-    await fs.chmod(binaryPath, 0o755)
-  }
-
-  // Create a placeholder README in lib directory
-  await writeFile(
-    path.join(packageDir, 'lib', 'README.md'),
-    `# Shared Libraries\n\nThis directory contains shared libraries (.so, .dylib, or .dll files) for ${toolName}.\n`,
     force
   )
 

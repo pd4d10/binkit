@@ -128,7 +128,7 @@ Or use the API programmatically:
 ```typescript
 import { createToolConfig, generateToolPackages } from 'binkit'
 
-const config = createToolConfig('mytool', '1.0.0')
+const config = createToolConfig({ toolName: 'mytool', version: '1.0.0' })
 await generateToolPackages(config, { outputDir: './packages', force: true })
 ```
 

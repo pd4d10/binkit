@@ -14,6 +14,20 @@ export const LICENSE: string = pkg.license;
 type PlatformId = string
 
 /**
+ * Binary name for tools with multiple binaries
+ * Export name will be auto-generated using camelCase
+ */
+export type BinaryName = string
+
+/**
+ * Download configuration for a platform
+ */
+export interface PlatformDownload {
+  /** Download URL */
+  url: string
+}
+
+/**
  * Configuration for a specific platform package
  */
 export interface PlatformConfig {
@@ -21,6 +35,8 @@ export interface PlatformConfig {
   platformId: PlatformId
   /** NPM package name (e.g., "@binkit/ffmpeg-linux-x64") */
   npmPackageName: string
+  /** Download configuration for this platform */
+  download?: PlatformDownload
 }
 
 /**
@@ -35,46 +51,43 @@ export interface ToolConfig {
   version: string
   /** List of supported platforms */
   platforms: PlatformConfig[]
+  /** List of binary names (for tools with multiple binaries like android-platform-tools) */
+  binaries?: BinaryName[]
+}
+
+export interface CreateToolConfigOptions {
+  /** Tool name */
+  toolName: string
+  /** Package version (default: 0.1.0) */
+  version?: string
+  /** List of binary names for tools with multiple binaries */
+  binaries?: BinaryName[]
+  /** Download URLs per platform (keyed by platformId) */
+  downloads?: Record<string, PlatformDownload>
 }
 
 /**
  * Create a default tool configuration
- * @param toolName - Name of the tool
- * @param version - Version string
+ * @param options - Tool configuration options
  * @returns ToolConfig with common platforms
  */
-export function createToolConfig(
-  toolName: string,
-  version: string = '0.1.0'
-): ToolConfig {
+export function createToolConfig(options: CreateToolConfigOptions): ToolConfig {
+  const { toolName, version = '0.1.0', binaries, downloads } = options
   const scope = '@binkit'
-  const platforms: PlatformConfig[] = [
-    {
-      platformId: 'darwin-x64',
-      npmPackageName: `${scope}/${toolName}-darwin-x64`,
-    },
-    {
-      platformId: 'darwin-arm64',
-      npmPackageName: `${scope}/${toolName}-darwin-arm64`,
-    },
-    {
-      platformId: 'linux-x64',
-      npmPackageName: `${scope}/${toolName}-linux-x64`,
-    },
-    {
-      platformId: 'linux-arm64',
-      npmPackageName: `${scope}/${toolName}-linux-arm64`,
-    },
-    {
-      platformId: 'win32-x64',
-      npmPackageName: `${scope}/${toolName}-win32-x64`,
-    },
-  ]
+
+  const platformIds = ['darwin-x64', 'darwin-arm64', 'linux-x64', 'linux-arm64', 'win32-x64']
+
+  const platforms: PlatformConfig[] = platformIds.map((platformId) => ({
+    platformId,
+    npmPackageName: `${scope}/${toolName}-${platformId}`,
+    download: downloads?.[platformId],
+  }))
 
   return {
     toolName,
     scope,
     version,
     platforms,
+    binaries,
   }
 }

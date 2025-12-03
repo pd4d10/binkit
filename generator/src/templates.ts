@@ -6,6 +6,55 @@ function parsePlatform(platformId: string): { os: string; arch: string } {
 }
 
 /**
+ * Convert a binary name to camelCase export name
+ * e.g., "hprof-conv" -> "hprofConv", "make_f2fs" -> "makeF2fs"
+ */
+function toCamelCase(name: string): string {
+  return name.replace(/[-_]([a-z0-9])/g, (_, char) => char.toUpperCase())
+}
+
+/**
+ * Get the filename from a path
+ * e.g., "platform-tools/adb" -> "adb"
+ */
+function getFilename(binaryPath: string): string {
+  const parts = binaryPath.split('/')
+  return parts[parts.length - 1]
+}
+
+interface BinaryInfo {
+  /** Full path relative to zip root (e.g., "platform-tools/adb") */
+  path: string
+  /** Binary filename (e.g., "adb") */
+  name: string
+  /** Export name in camelCase (e.g., "hprofConv") */
+  exportName: string
+}
+
+/**
+ * Get the list of binaries for a tool
+ * If no binaries are specified, use the tool name as the only binary
+ */
+function getBinaries(config: ToolConfig): BinaryInfo[] {
+  if (config.binaries && config.binaries.length > 0) {
+    return config.binaries.map((binaryPath) => {
+      const name = getFilename(binaryPath)
+      return {
+        path: binaryPath,
+        name,
+        exportName: toCamelCase(name),
+      }
+    })
+  }
+  // Default: single binary with the tool name
+  return [{
+    path: config.toolName,
+    name: config.toolName,
+    exportName: toCamelCase(config.toolName),
+  }]
+}
+
+/**
  * Generate package.json for the main tool package
  * No build scripts or typescript - dist files are pre-compiled
  */
@@ -47,9 +96,31 @@ export function generateMainPackageJson(config: ToolConfig): string {
  */
 export function generateMainIndexJs(config: ToolConfig): string {
   const { toolName, platforms } = config
+  const binaries = getBinaries(config)
+
+  // Generate export functions for each binary
+  const exportFunctions = binaries
+    .map(
+      (binary) => `/**
+ * Run ${binary.name} with the given arguments
+ * @param args - Command line arguments
+ * @param options - Run options
+ * @returns Promise that resolves with execution result
+ */
+export async function ${binary.exportName}(args = [], options = {}) {
+  const binDir = getBinDir();
+  const extension = process.platform === 'win32' ? '.exe' : '';
+  const binaryPath = path.join(binDir, '${binary.name}' + extension);
+  return runBinary(binaryPath, args, options);
+}`
+    )
+    .join('\n\n')
 
   return `import { spawn } from 'node:child_process';
 import path from 'node:path';
+import { createRequire } from 'node:module';
+
+const require = createRequire(import.meta.url);
 
 /**
  * Get the current platform identifier
@@ -136,10 +207,10 @@ async function runBinary(binaryPath, args = [], options = {}) {
 }
 
 /**
- * Load the native binary for the current platform
- * @returns Path to the binary
+ * Get the bin directory for the current platform
+ * @returns Path to the bin directory
  */
-function loadNativeBinary() {
+function getBinDir() {
   const platformId = getCurrentPlatform();
   const platformPackages = {
 ${platforms.map((p) => `    '${p.platformId}': '${p.npmPackageName}',`).join('\n')}
@@ -148,7 +219,7 @@ ${platforms.map((p) => `    '${p.platformId}': '${p.npmPackageName}',`).join('\n
   const packageName = platformPackages[platformId];
   if (!packageName) {
     throw new Error(
-      \`${capitalize(toolName)} binary not found for platform: \${platformId}.\\n\` +
+      \`${capitalize(toolName)} binaries not found for platform: \${platformId}.\\n\` +
       \`Supported platforms: \${Object.keys(platformPackages).join(', ')}\`
     );
   }
@@ -156,14 +227,14 @@ ${platforms.map((p) => `    '${p.platformId}': '${p.npmPackageName}',`).join('\n
   try {
     const platformModule = require(packageName);
 
-    if (platformModule?.binaryPath) {
-      return platformModule.binaryPath;
+    if (platformModule?.binDir) {
+      return platformModule.binDir;
     }
 
-    throw new Error(\`Package \${packageName} does not export binaryPath\`);
+    throw new Error(\`Package \${packageName} does not export binDir\`);
   } catch (error) {
     throw new Error(
-      \`${capitalize(toolName)} binary not found for platform: \${platformId}.\\n\` +
+      \`${capitalize(toolName)} binaries not found for platform: \${platformId}.\\n\` +
       \`Please ensure the platform-specific package is installed: \${packageName}\\n\` +
       \`If you're using npm/pnpm, optional dependencies might not have been installed.\\n\` +
       \`Try installing manually: npm install \${packageName}\\n\` +
@@ -172,17 +243,7 @@ ${platforms.map((p) => `    '${p.platformId}': '${p.npmPackageName}',`).join('\n
   }
 }
 
-/**
- * Run ${toolName} with the given arguments
- * @param options - Run options including arguments
- * @returns Promise that resolves to the exit code
- */
-export async function run${capitalize(toolName)}(options) {
-  const binaryPath = loadNativeBinary();
-  const { args, ...runOptions } = options;
-  const result = await runBinary(binaryPath, args, runOptions);
-  return result.exitCode;
-}
+${exportFunctions}
 `
 }
 
@@ -191,7 +252,20 @@ export async function run${capitalize(toolName)}(options) {
  * TypeScript type definitions
  */
 export function generateMainIndexDts(config: ToolConfig): string {
-  const { toolName } = config
+  const binaries = getBinaries(config)
+
+  // Generate export declarations for each binary
+  const exportDeclarations = binaries
+    .map(
+      (binary) => `/**
+ * Run ${binary.name} with the given arguments
+ * @param args - Command line arguments
+ * @param options - Run options
+ * @returns Promise that resolves with execution result
+ */
+export declare function ${binary.exportName}(args?: string[], options?: RunOptions): Promise<RunResult>;`
+    )
+    .join('\n\n')
 
   return `export interface RunOptions {
   cwd?: string;
@@ -199,16 +273,13 @@ export function generateMainIndexDts(config: ToolConfig): string {
   stdio?: 'inherit' | 'pipe' | 'ignore';
 }
 
-export interface ${capitalize(toolName)}RunOptions extends RunOptions {
-  args: string[];
+export interface RunResult {
+  exitCode: number;
+  stdout?: string;
+  stderr?: string;
 }
 
-/**
- * Run ${toolName} with the given arguments
- * @param options - Run options including arguments
- * @returns Promise that resolves to the exit code
- */
-export declare function run${capitalize(toolName)}(options: ${capitalize(toolName)}RunOptions): Promise<number>;
+${exportDeclarations}
 `
 }
 
@@ -255,7 +326,19 @@ export function generatePlatformIndexJs(
   platform: PlatformConfig
 ): string {
   const { toolName } = config
+  const binaries = getBinaries(config)
   const extension = platform.platformId.startsWith('win32') ? '.exe' : ''
+
+  // For single binary tools, also export binaryPath for backwards compatibility
+  const binaryPathExport =
+    binaries.length === 1
+      ? `
+/**
+ * Path to the ${toolName} binary for this platform
+ */
+export const binaryPath = path.join(__dirname, '..', 'bin', '${toolName}${extension}');
+`
+      : ''
 
   return `import { fileURLToPath } from 'node:url';
 import path from 'node:path';
@@ -263,10 +346,10 @@ import path from 'node:path';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 /**
- * Path to the ${toolName} binary for this platform
+ * Path to the bin directory containing binaries for this platform
  */
-export const binaryPath = path.join(__dirname, '..', 'bin', '${toolName}${extension}');
-
+export const binDir = path.join(__dirname, '..', 'bin');
+${binaryPathExport}
 /**
  * Path to the lib directory containing shared libraries
  */
@@ -282,12 +365,24 @@ export function generatePlatformIndexDts(
   _platform: PlatformConfig
 ): string {
   const { toolName } = config
+  const binaries = getBinaries(config)
 
-  return `/**
+  // For single binary tools, also export binaryPath for backwards compatibility
+  const binaryPathExport =
+    binaries.length === 1
+      ? `
+/**
  * Path to the ${toolName} binary for this platform
  */
 export declare const binaryPath: string;
+`
+      : ''
 
+  return `/**
+ * Path to the bin directory containing binaries for this platform
+ */
+export declare const binDir: string;
+${binaryPathExport}
 /**
  * Path to the lib directory containing shared libraries
  */
