@@ -107,6 +107,7 @@ function getPredefinedConfig(toolName: string, version?: string) {
     version: version ?? config.version,
     binaries: config.binaries,
     downloads,
+    verify: config.verify,
   })
 }
 

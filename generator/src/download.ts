@@ -2,9 +2,10 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import { createWriteStream } from 'node:fs'
 import { pipeline } from 'node:stream/promises'
-import { exec } from 'node:child_process'
+import { exec, spawn } from 'node:child_process'
 import { promisify } from 'node:util'
 import type { PlatformConfig, ToolConfig } from './config.js'
+import type { VerifyCommands } from './tools/index.js'
 
 const execAsync = promisify(exec)
 
@@ -80,12 +81,64 @@ export async function extractBinaries(
 }
 
 /**
+ * Run a command and return the exit code and output
+ */
+function runCommand(binaryPath: string, args: string[]): Promise<{ code: number; output: string }> {
+  return new Promise((resolve) => {
+    const child = spawn(binaryPath, args)
+    let output = ''
+
+    child.stdout.on('data', (data) => {
+      output += data.toString()
+    })
+    child.stderr.on('data', (data) => {
+      output += data.toString()
+    })
+
+    child.on('close', (code) => {
+      resolve({ code: code ?? 1, output })
+    })
+  })
+}
+
+/**
+ * Verify binaries by running commands
+ */
+export async function verifyBinaries(
+  binDir: string,
+  commands: VerifyCommands
+): Promise<void> {
+  console.log(`  🔍 Verifying binaries...`)
+
+  for (const command of commands) {
+    const [binaryName, ...args] = command.split(' ')
+    const binaryPath = path.join(binDir, binaryName)
+
+    // Check if binary exists
+    const exists = await fs.access(binaryPath).then(() => true).catch(() => false)
+    if (!exists) {
+      throw new Error(`Binary not found: ${binaryPath}`)
+    }
+
+    const { code, output } = await runCommand(binaryPath, args)
+    const firstLine = output.trim().split('\n')[0]
+
+    if (code === 0) {
+      console.log(`    ✓ ${binaryName}: ${firstLine}`)
+    } else {
+      throw new Error(`Verification failed for ${binaryName} (exit code ${code}): ${firstLine}`)
+    }
+  }
+}
+
+/**
  * Download and extract binaries for a platform
  */
 export async function downloadAndExtractPlatform(
   config: ToolConfig,
   platform: PlatformConfig,
-  packageDir: string
+  packageDir: string,
+  verify?: VerifyCommands
 ): Promise<void> {
   if (!platform.download?.url) {
     console.log(`  ⚠ No download URL for ${platform.platformId}, skipping download`)
@@ -105,4 +158,9 @@ export async function downloadAndExtractPlatform(
 
   // Extract binaries to bin directory
   await extractBinaries(zipPath, binDir, binaryPaths)
+
+  // Verify binaries if commands are provided
+  if (verify && verify.length > 0) {
+    await verifyBinaries(binDir, verify)
+  }
 }

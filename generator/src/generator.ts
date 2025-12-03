@@ -61,7 +61,7 @@ export async function generateToolPackages(
     // Download binaries if requested and download URL is configured
     if (download && platform.download?.url) {
       const packageDir = path.join(outputDir, `${config.toolName}-${platform.platformId}`)
-      await downloadAndExtractPlatform(config, platform, packageDir)
+      await downloadAndExtractPlatform(config, platform, packageDir, config.verify)
     }
   }
 
