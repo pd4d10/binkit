@@ -1,9 +1,12 @@
 node_modules/
-dist/
 *.log
 .DS_Store
 *.tsbuildinfo
 .eslintcache
 
-# Generated tool packages
-packages/
+# Build outputs
+dist/
+
+# Platform-specific binary files (downloaded, not built)
+packages/*/bin/
+packages/*/lib/

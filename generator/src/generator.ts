@@ -38,9 +38,8 @@ export async function generateToolPackages(
 
   console.log(`Generating packages for ${config.toolName}...`)
 
-  // Ensure output directory and workspace files exist
+  // Ensure output directory exists
   await ensureDir(outputDir)
-  await generateWorkspaceFiles(outputDir, force)
 
   // Generate main package
   await generateMainPackage(config, outputDir, force)
@@ -64,36 +63,6 @@ export async function generateToolPackages(
   }
 
   console.log(`✓ Successfully generated packages for ${config.toolName}`)
-}
-
-/**
- * Generate pnpm-workspace.yaml and package.json in the output directory
- */
-async function generateWorkspaceFiles(
-  outputDir: string,
-  force: boolean
-): Promise<void> {
-  // Generate pnpm-workspace.yaml
-  await writeFile(
-    path.join(outputDir, 'pnpm-workspace.yaml'),
-    'packages:\n  - "*"\n',
-    force
-  )
-
-  // Generate minimal package.json
-  const pkg = {
-    name: 'binkit-packages',
-    version: '0.1.0',
-    private: true,
-    scripts: {
-      publish: 'pnpm -r publish --access public',
-    },
-  }
-  await writeFile(
-    path.join(outputDir, 'package.json'),
-    JSON.stringify(pkg, null, 2),
-    force
-  )
 }
 
 /**

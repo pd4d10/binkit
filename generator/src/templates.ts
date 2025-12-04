@@ -64,7 +64,7 @@ export function generateMainPackageJson(config: ToolConfig): string {
 
   const optionalDependencies: Record<string, string> = {}
   for (const platform of platforms) {
-    optionalDependencies[platform.npmPackageName] = version
+    optionalDependencies[platform.npmPackageName] = 'workspace:^'
   }
 
   const pkg = {
@@ -85,7 +85,7 @@ export function generateMainPackageJson(config: ToolConfig): string {
     author: AUTHOR,
     license: LICENSE,
     dependencies: {
-      '@binkit/runtime': '^0.1.0',
+      '@binkit/runtime': 'workspace:^',
     },
     optionalDependencies,
   }
