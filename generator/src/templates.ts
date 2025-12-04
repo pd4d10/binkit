@@ -84,6 +84,9 @@ export function generateMainPackageJson(config: ToolConfig): string {
     keywords: ['binkit', toolName, 'binary', 'cli'],
     author: AUTHOR,
     license: LICENSE,
+    dependencies: {
+      '@binkit/runtime': '^0.1.0',
+    },
     optionalDependencies,
   }
 
@@ -116,95 +119,11 @@ export async function ${binary.exportName}(args = [], options = {}) {
     )
     .join('\n\n')
 
-  return `import { spawn } from 'node:child_process';
-import path from 'node:path';
+  return `import path from 'node:path';
 import { createRequire } from 'node:module';
+import { getCurrentPlatform, runBinary } from '@binkit/runtime';
 
 const require = createRequire(import.meta.url);
-
-/**
- * Get the current platform identifier
- * @returns PlatformId in format <os>-<arch>
- */
-function getCurrentPlatform() {
-  return \`\${process.platform}-\${process.arch}\`;
-}
-
-/**
- * Get library path environment variable name for the current platform
- * @returns Environment variable name for library path
- */
-function getLibraryPathEnvVar() {
-  const platform = process.platform;
-  switch (platform) {
-    case 'darwin':
-      return 'DYLD_LIBRARY_PATH';
-    case 'win32':
-      return 'PATH';
-    default:
-      return 'LD_LIBRARY_PATH';
-  }
-}
-
-/**
- * Run a binary with the given arguments and options
- * Automatically configures environment variables for library paths
- */
-async function runBinary(binaryPath, args = [], options = {}) {
-  const { cwd, env = {}, stdio = 'inherit' } = options;
-
-  const binaryDir = path.dirname(binaryPath);
-  const libDir = path.join(path.dirname(binaryDir), 'lib');
-
-  const libPathEnvVar = getLibraryPathEnvVar();
-  const envVars = {
-    ...process.env,
-    ...env,
-    PATH: \`\${binaryDir}\${path.delimiter}\${env.PATH || process.env.PATH || ''}\`,
-  };
-
-  if (libPathEnvVar === 'PATH') {
-    envVars.PATH = \`\${libDir}\${path.delimiter}\${envVars.PATH}\`;
-  } else {
-    const existingLibPath = env[libPathEnvVar] || process.env[libPathEnvVar] || '';
-    envVars[libPathEnvVar] = existingLibPath
-      ? \`\${libDir}\${path.delimiter}\${existingLibPath}\`
-      : libDir;
-  }
-
-  return new Promise((resolve, reject) => {
-    const child = spawn(binaryPath, args, {
-      cwd,
-      env: envVars,
-      stdio,
-    });
-
-    let stdout = '';
-    let stderr = '';
-
-    if (stdio === 'pipe') {
-      child.stdout?.on('data', (data) => {
-        stdout += data.toString();
-      });
-
-      child.stderr?.on('data', (data) => {
-        stderr += data.toString();
-      });
-    }
-
-    child.on('error', (error) => {
-      reject(new Error(\`Failed to execute binary: \${error.message}\`));
-    });
-
-    child.on('close', (code) => {
-      resolve({
-        exitCode: code ?? 1,
-        stdout: stdio === 'pipe' ? stdout : undefined,
-        stderr: stdio === 'pipe' ? stderr : undefined,
-      });
-    });
-  });
-}
 
 /**
  * Get the bin directory for the current platform
@@ -225,13 +144,8 @@ ${platforms.map((p) => `    '${p.platformId}': '${p.npmPackageName}',`).join('\n
   }
 
   try {
-    const platformModule = require(packageName);
-
-    if (platformModule?.binDir) {
-      return platformModule.binDir;
-    }
-
-    throw new Error(\`Package \${packageName} does not export binDir\`);
+    const packageJsonPath = require.resolve(packageName + '/package.json');
+    return path.join(path.dirname(packageJsonPath), 'bin');
   } catch (error) {
     throw new Error(
       \`${capitalize(toolName)} binaries not found for platform: \${platformId}.\\n\` +
@@ -267,17 +181,7 @@ export declare function ${binary.exportName}(args?: string[], options?: RunOptio
     )
     .join('\n\n')
 
-  return `export interface RunOptions {
-  cwd?: string;
-  env?: Record<string, string>;
-  stdio?: 'inherit' | 'pipe' | 'ignore';
-}
-
-export interface RunResult {
-  exitCode: number;
-  stdout?: string;
-  stderr?: string;
-}
+  return `export type { RunOptions, RunResult } from '@binkit/runtime';
 
 ${exportDeclarations}
 `
@@ -285,7 +189,7 @@ ${exportDeclarations}
 
 /**
  * Generate package.json for a platform-specific package
- * No build scripts or typescript - dist files are pre-compiled
+ * Platform packages are just binary containers - no JS code needed
  */
 export function generatePlatformPackageJson(
   config: ToolConfig,
@@ -298,16 +202,7 @@ export function generatePlatformPackageJson(
     name: platform.npmPackageName,
     version,
     description: `${capitalize(toolName)} binary for ${os}-${arch}`,
-    type: 'module',
-    main: './dist/index.js',
-    types: './dist/index.d.ts',
-    exports: {
-      '.': {
-        types: './dist/index.d.ts',
-        import: './dist/index.js',
-      },
-    },
-    files: ['dist', 'bin', 'lib'],
+    files: ['bin', 'lib'],
     os: [os],
     cpu: [arch],
     keywords: ['binkit', toolName, 'binary', os, arch],
@@ -316,78 +211,6 @@ export function generatePlatformPackageJson(
   }
 
   return JSON.stringify(pkg, null, 2)
-}
-
-/**
- * Generate index.js for a platform-specific package
- */
-export function generatePlatformIndexJs(
-  config: ToolConfig,
-  platform: PlatformConfig
-): string {
-  const { toolName } = config
-  const binaries = getBinaries(config)
-  const extension = platform.platformId.startsWith('win32') ? '.exe' : ''
-
-  // For single binary tools, also export binaryPath for backwards compatibility
-  const binaryPathExport =
-    binaries.length === 1
-      ? `
-/**
- * Path to the ${toolName} binary for this platform
- */
-export const binaryPath = path.join(__dirname, '..', 'bin', '${toolName}${extension}');
-`
-      : ''
-
-  return `import { fileURLToPath } from 'node:url';
-import path from 'node:path';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-
-/**
- * Path to the bin directory containing binaries for this platform
- */
-export const binDir = path.join(__dirname, '..', 'bin');
-${binaryPathExport}
-/**
- * Path to the lib directory containing shared libraries
- */
-export const libPath = path.join(__dirname, '..', 'lib');
-`
-}
-
-/**
- * Generate index.d.ts for a platform-specific package
- */
-export function generatePlatformIndexDts(
-  config: ToolConfig,
-  _platform: PlatformConfig
-): string {
-  const { toolName } = config
-  const binaries = getBinaries(config)
-
-  // For single binary tools, also export binaryPath for backwards compatibility
-  const binaryPathExport =
-    binaries.length === 1
-      ? `
-/**
- * Path to the ${toolName} binary for this platform
- */
-export declare const binaryPath: string;
-`
-      : ''
-
-  return `/**
- * Path to the bin directory containing binaries for this platform
- */
-export declare const binDir: string;
-${binaryPathExport}
-/**
- * Path to the lib directory containing shared libraries
- */
-export declare const libPath: string;
-`
 }
 
 /**

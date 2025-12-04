@@ -27,6 +27,12 @@ importers:
         specifier: ^22.10.1
         version: 22.19.1
 
+  runtime:
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.1
+        version: 22.19.1
+
 packages:
 
   '@eslint-community/eslint-utils@4.9.0':

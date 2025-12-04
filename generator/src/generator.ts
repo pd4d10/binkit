@@ -6,8 +6,6 @@ import {
   generateMainIndexJs,
   generateMainIndexDts,
   generatePlatformPackageJson,
-  generatePlatformIndexJs,
-  generatePlatformIndexDts,
 } from './templates.js'
 import { downloadAndExtractPlatform } from './download.js'
 
@@ -138,6 +136,7 @@ async function generateMainPackage(
 
 /**
  * Generate a platform-specific package
+ * Platform packages are just binary containers - no JS code needed
  */
 async function generatePlatformPackage(
   config: ToolConfig,
@@ -150,29 +149,15 @@ async function generatePlatformPackage(
   const packageName = `${toolName}-${platformSuffix}`
   const packageDir = path.join(outputDir, packageName)
 
-  // Create directory structure
+  // Create directory structure (bin and lib for binaries)
   await ensureDir(packageDir)
-  await ensureDir(path.join(packageDir, 'dist'))
   await ensureDir(path.join(packageDir, 'bin'))
   await ensureDir(path.join(packageDir, 'lib'))
 
-  // Generate files
+  // Generate package.json only
   await writeFile(
     path.join(packageDir, 'package.json'),
     generatePlatformPackageJson(config, platform),
-    force
-  )
-
-  // Write pre-compiled JavaScript and type definitions
-  await writeFile(
-    path.join(packageDir, 'dist', 'index.js'),
-    generatePlatformIndexJs(config, platform),
-    force
-  )
-
-  await writeFile(
-    path.join(packageDir, 'dist', 'index.d.ts'),
-    generatePlatformIndexDts(config, platform),
     force
   )
 
