@@ -1,9 +1,5 @@
-// Types
-export type { RunOptions, RunResult, PlatformId } from './types.js'
-
-// Platform utilities
-export { getCurrentPlatform, getLibraryPathEnvVar } from './platform.js'
+// Platform
+export { getCurrentPlatform, getLibraryPathEnvVar, type PlatformId } from './platform.js'
 
 // Binary runner
-export { runBinary } from './runner.js'
-
+export { createBinaryRunner, type BinaryRunner } from './runner.js'

@@ -1,4 +1,8 @@
-import type { PlatformId } from './types.js'
+/**
+ * Platform identifier in format <os>-<arch>
+ * e.g., 'darwin-arm64', 'linux-x64', 'win32-x64'
+ */
+export type PlatformId = string
 
 /**
  * Get the current platform identifier
@@ -23,4 +27,3 @@ export function getLibraryPathEnvVar(): string {
       return 'LD_LIBRARY_PATH'
   }
 }
-

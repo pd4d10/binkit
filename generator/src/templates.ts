@@ -101,27 +101,20 @@ export function generateMainIndexJs(config: ToolConfig): string {
   const { toolName, platforms } = config
   const binaries = getBinaries(config)
 
-  // Generate export functions for each binary
-  const exportFunctions = binaries
+  // Generate exports for each binary
+  const binaryExports = binaries
     .map(
       (binary) => `/**
- * Run ${binary.name} with the given arguments
- * @param args - Command line arguments
- * @param options - Run options
- * @returns Promise that resolves with execution result
+ * Binary runner for ${binary.name}.
+ * Provides spawn, spawnSync, exec, execSync methods.
  */
-export async function ${binary.exportName}(args = [], options = {}) {
-  const binDir = getBinDir();
-  const extension = process.platform === 'win32' ? '.exe' : '';
-  const binaryPath = path.join(binDir, '${binary.name}' + extension);
-  return runBinary(binaryPath, args, options);
-}`
+export const ${binary.exportName} = createBinaryRunner(getBinaryPath('${binary.name}'));`
     )
     .join('\n\n')
 
   return `import path from 'node:path';
 import { createRequire } from 'node:module';
-import { getCurrentPlatform, runBinary } from '@binkit/runtime';
+import { getCurrentPlatform, createBinaryRunner } from '@binkit/runtime';
 
 const require = createRequire(import.meta.url);
 
@@ -157,7 +150,18 @@ ${platforms.map((p) => `    '${p.platformId}': '${p.npmPackageName}',`).join('\n
   }
 }
 
-${exportFunctions}
+/**
+ * Get the full path to a binary
+ * @param name - Binary name (without extension)
+ * @returns Full path to the binary
+ */
+function getBinaryPath(name) {
+  const binDir = getBinDir();
+  const extension = process.platform === 'win32' ? '.exe' : '';
+  return path.join(binDir, name + extension);
+}
+
+${binaryExports}
 `
 }
 
@@ -172,16 +176,15 @@ export function generateMainIndexDts(config: ToolConfig): string {
   const exportDeclarations = binaries
     .map(
       (binary) => `/**
- * Run ${binary.name} with the given arguments
- * @param args - Command line arguments
- * @param options - Run options
- * @returns Promise that resolves with execution result
+ * Binary runner for ${binary.name}.
+ * Provides spawn, spawnSync, exec, execSync methods.
  */
-export declare function ${binary.exportName}(args?: string[], options?: RunOptions): Promise<RunResult>;`
+export declare const ${binary.exportName}: BinaryRunner;`
     )
     .join('\n\n')
 
-  return `export type { RunOptions, RunResult } from '@binkit/runtime';
+  return `export type { BinaryRunner } from '@binkit/runtime';
+import type { BinaryRunner } from '@binkit/runtime';
 
 ${exportDeclarations}
 `
