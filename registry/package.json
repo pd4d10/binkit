@@ -1,0 +1,27 @@
+{
+  "name": "@binkit/registry",
+  "version": "0.1.0",
+  "private": true,
+  "description": "BinKit tool registry - configurations for all supported tools",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "clean": "rm -rf dist"
+  },
+  "keywords": [
+    "binkit",
+    "registry",
+    "tools"
+  ],
+  "author": "Rongjian Zhang <pd4d10@gmail.com>",
+  "license": "MIT"
+}
+

@@ -5,7 +5,7 @@ import { pipeline } from 'node:stream/promises'
 import { exec, spawn } from 'node:child_process'
 import { promisify } from 'node:util'
 import type { PlatformConfig, ToolConfig } from './config.js'
-import type { VerifyCommands } from './tools/index.js'
+import type { VerifyCommands } from '@binkit/registry'
 
 const execAsync = promisify(exec)
 

@@ -11,7 +11,7 @@ const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'))
 export const AUTHOR: string = pkg.author;
 export const LICENSE: string = pkg.license;
 
-import type { VerifyCommands } from './tools/index.js'
+import type { VerifyCommands } from '@binkit/registry'
 
 type PlatformId = string
 

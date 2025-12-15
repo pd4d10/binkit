@@ -18,6 +18,9 @@
   ],
   "author": "Rongjian Zhang <pd4d10@gmail.com>",
   "license": "MIT",
+  "dependencies": {
+    "@binkit/registry": "workspace:*"
+  },
   "devDependencies": {
     "@types/node": "^22.10.1"
   }

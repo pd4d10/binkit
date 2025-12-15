@@ -2,7 +2,7 @@
 
 import { createToolConfig } from './config.js'
 import { generateToolPackages } from './generator.js'
-import { toolConfigs } from './tools/index.js'
+import { entries } from '@binkit/registry'
 
 const args = process.argv.slice(2)
 
@@ -62,7 +62,7 @@ function showHelp() {
   console.log('  -h, --help              Show this help message')
   console.log('')
   console.log('PREDEFINED TOOLS')
-  for (const toolName of Object.keys(toolConfigs)) {
+  for (const toolName of Object.keys(entries)) {
     console.log(`  ${toolName}`)
   }
   console.log('')
@@ -92,7 +92,7 @@ function showHelp() {
 
 // Get predefined tool configuration
 function getPredefinedConfig(toolName: string, version?: string) {
-  const config = toolConfigs[toolName]
+  const config = entries[toolName]
   if (!config) {
     return null
   }
