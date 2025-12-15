@@ -7,6 +7,5 @@ node_modules/
 # Build outputs
 dist/
 
-# Platform-specific binary files (downloaded, not built)
-packages/*/bin/
-packages/*/lib/
+# Generated packages (source of truth is generator/)
+packages/
