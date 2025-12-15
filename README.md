@@ -108,7 +108,45 @@ Each tool (like `ffmpeg`) consists of:
    - Exports `binaryPath` and `libPath`
    - Marked with `os` and `cpu` fields in package.json
 
+## Versioning Strategy
+
+BinKit packages follow a modified semver scheme to balance framework stability with binary updates:
+
+```
+{framework-major}.{binary-major}.{patch}
+```
+
+| Position | Meaning | Example |
+|----------|---------|---------|
+| **Major** | Framework breaking changes | `1.x.x` → `2.x.x` (runtime API change) |
+| **Minor** | Binary major version | `1.35.x` (upstream v35.x.x) |
+| **Patch** | Binary minor/patch or framework fixes | `1.35.1`, `1.35.2` |
+
+### Version Evolution Example
+
+```
+1.35.0  → Initial release (Android Platform Tools 35.0.0)
+1.35.1  → Binary 35.0.1 or framework bug fix
+1.35.2  → Binary 35.0.2 or framework bug fix
+1.36.0  → Binary 36.0.0 (upstream major upgrade)
+2.0.0   → Framework breaking change (e.g., runtime API change)
+```
+
+The `upstreamVersion` field in tool configs tracks the original binary version for reference.
+
 ## Development
+
+### Setup (Fresh Clone)
+
+```bash
+git clone <repo>
+pnpm install         # Install generator/runtime dependencies
+pnpm build           # Build generator and runtime
+pnpm generate        # Generate packages/ directory
+pnpm install         # Link generated packages
+```
+
+**Note**: The `packages/` directory is gitignored. It's generated from `generator/src/tools/index.ts`.
 
 ### Adding a New Tool
 
