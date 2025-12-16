@@ -50,7 +50,7 @@ jobs:
           if [ -n "${{ inputs.name }}" ]; then
             echo "Manual publish: ${{ inputs.name }}@${{ inputs.upstream_version }}"
             echo "has_unpublished=true" >> $GITHUB_OUTPUT
-            echo 'matrix={"include":[{"tool":"${{ inputs.name }}","upstreamVersion":"${{ inputs.upstream_version }}"}]}' >> $GITHUB_OUTPUT
+            echo 'matrix={"include":[{"name":"${{ inputs.name }}","version":"${{ inputs.upstream_version }}"}]}' >> $GITHUB_OUTPUT
             exit 0
           fi
 
@@ -117,7 +117,7 @@ jobs:
           UNPUBLISHED: ${{ needs.check.outputs.matrix }}
         run: |
           # Parse the unpublished versions
-          TOOLS=$(echo "$UNPUBLISHED" | jq -r '.include[] | "\(.tool):\(.upstreamVersion)"')
+          TOOLS=$(echo "$UNPUBLISHED" | jq -r '.include[] | "\(.name):\(.version)"')
 
           for ENTRY in $TOOLS; do
             TOOL=$(echo "$ENTRY" | cut -d: -f1)
@@ -170,11 +170,11 @@ jobs:
 
       - name: Generate main package
         run: |
-          node cli/dist/cli.js main ${{ matrix.tool }} ${{ matrix.upstreamVersion }}
+          node cli/dist/cli.js main ${{ matrix.name }} ${{ matrix.version }}
 
       - name: Publish main package
         run: |
-          cd packages/${{ matrix.tool }}
+          cd packages/${{ matrix.name }}
           npm publish --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

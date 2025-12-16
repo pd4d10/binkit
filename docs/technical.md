@@ -371,7 +371,7 @@ Checking for unpublished versions...
 Unpublished versions:
   - android-platform-tools@35.0.0
 
-UNPUBLISHED_JSON=[{"tool":"android-platform-tools","upstreamVersion":"35.0.0"}]
+UNPUBLISHED_JSON=[{"name":"android-platform-tools","version":"35.0.0"}]
 ```
 
 The check logic:
@@ -379,17 +379,18 @@ The check logic:
 ```typescript
 export async function getUnpublishedVersions(
   entries: Record<string, { versions: string[] }>
-): Promise<UnpublishedVersion[]> {
-  const unpublished: UnpublishedVersion[] = [];
+): Promise<Record<string, string[]>> {
+  const unpublished: Record<string, string[]> = {};
 
-  for (const [tool, entry] of Object.entries(entries)) {
-    const publishedMetadata = await fetchPublishedMetadata(`${SCOPE}/${tool}`);
+  for (const [name, entry] of Object.entries(entries)) {
+    const publishedMetadata = await fetchPublishedMetadata(`${SCOPE}/${name}`);
 
-    for (const upstreamVersion of entry.versions) {
-      // Check if any published version has this upstreamVersion in metadata
-      if (!isVersionPublished(upstreamVersion, publishedMetadata)) {
-        unpublished.push({ tool, upstreamVersion });
-      }
+    const unpublishedVersions = entry.versions.filter(
+      (version) => !isVersionPublished(version, publishedMetadata)
+    );
+
+    if (unpublishedVersions.length > 0) {
+      unpublished[name] = unpublishedVersions;
     }
   }
 
