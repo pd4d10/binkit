@@ -9,10 +9,12 @@ export { getTargetId } from './types.js'
 
 import type { RegistryEntry } from './types.js'
 import { androidPlatformTools } from './entries/android-platform-tools.js'
+import { ffmpeg } from './entries/ffmpeg.js'
 
 /**
  * Registry entries, keyed by name
  */
 export const entries: Record<string, RegistryEntry> = {
   'android-platform-tools': androidPlatformTools,
+  ffmpeg,
 }
