@@ -71,48 +71,9 @@ jobs:
             echo "matrix=$MATRIX" >> $GITHUB_OUTPUT
           fi
 
-  # Publish main package for each unpublished version
-  publish-main:
-    needs: check
-    if: needs.check.outputs.has_unpublished == 'true'
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix: ${{ fromJson(needs.check.outputs.matrix) }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Enable corepack
-        run: corepack enable
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-          cache: "pnpm"
-          registry-url: "https://registry.npmjs.org"
-
-      - name: Install dependencies
-        run: pnpm install
-
-      - name: Build
-        run: pnpm build
-
-      - name: Generate main package
-        run: |
-          node cli/dist/cli.js main ${{ matrix.tool }} ${{ matrix.upstreamVersion }}
-
-      - name: Publish main package
-        run: |
-          cd packages/${{ matrix.tool }}
-          npm publish --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-
-  # Build and publish target packages on each platform
+  # Build and publish target packages on each platform (must complete before main package)
   publish-targets:
-    needs: [check, publish-main]
+    needs: check
     if: needs.check.outputs.has_unpublished == 'true'
     strategy:
       fail-fast: false
@@ -178,3 +139,42 @@ jobs:
               echo "⚠️ Target ${{ matrix.target.id }} is not supported by $TOOL, skipping..."
             fi
           done
+
+  # Publish main package after all target packages are published
+  publish-main:
+    needs: [check, publish-targets]
+    if: needs.check.outputs.has_unpublished == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.check.outputs.matrix) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Enable corepack
+        run: corepack enable
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "pnpm"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Build
+        run: pnpm build
+
+      - name: Generate main package
+        run: |
+          node cli/dist/cli.js main ${{ matrix.tool }} ${{ matrix.upstreamVersion }}
+
+      - name: Publish main package
+        run: |
+          cd packages/${{ matrix.tool }}
+          npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
