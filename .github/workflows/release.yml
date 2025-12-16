@@ -7,9 +7,8 @@
 # 2. Runs platform-specific jobs to generate, verify, and publish platform packages
 # 3. After all platform packages are published, publishes the main package
 #
-# Authentication: Uses npm Trusted Publishing (OIDC) - no secrets required!
-# Setup: Configure trusted publishers on npmjs.com for each package
-# See: https://docs.npmjs.com/generating-provenance-statements
+# Authentication: Uses NPM_TOKEN secret (Granular Access Token with @binkit scope)
+# This allows publishing new packages without pre-configuring each one on npmjs.com
 
 name: Release
 
@@ -139,9 +138,11 @@ jobs:
 
       - name: Publish platform package
         if: steps.generate.outputs.supported == 'true' && needs.parse-tag.outputs.dry-run != 'true'
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           cd packages/${{ needs.parse-tag.outputs.tool-name }}-${{ matrix.platform }}
-          npm publish --access public --provenance
+          npm publish --access public
 
       - name: Dry run - skip publish
         if: steps.generate.outputs.supported == 'true' && needs.parse-tag.outputs.dry-run == 'true'
@@ -187,9 +188,11 @@ jobs:
 
       - name: Publish main package
         if: needs.parse-tag.outputs.dry-run != 'true'
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           cd packages/${{ needs.parse-tag.outputs.tool-name }}
-          npm publish --access public --provenance
+          npm publish --access public
 
       - name: Dry run - skip publish
         if: needs.parse-tag.outputs.dry-run == 'true'
