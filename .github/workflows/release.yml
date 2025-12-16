@@ -7,6 +7,15 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      name:
+        description: "Tool name to publish (skips check, for hotfixes)"
+        required: true
+        type: string
+      upstream_version:
+        description: "Upstream version to publish"
+        required: true
+        type: string
 
 jobs:
   # Check which versions need to be published
@@ -37,6 +46,15 @@ jobs:
       - name: Check for unpublished versions
         id: check
         run: |
+          # Manual trigger with inputs - skip check
+          if [ -n "${{ inputs.name }}" ]; then
+            echo "Manual publish: ${{ inputs.name }}@${{ inputs.upstream_version }}"
+            echo "has_unpublished=true" >> $GITHUB_OUTPUT
+            echo 'matrix={"include":[{"tool":"${{ inputs.name }}","upstreamVersion":"${{ inputs.upstream_version }}"}]}' >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # Auto mode - check for unpublished versions
           OUTPUT=$(node cli/dist/cli.js check)
           echo "$OUTPUT"
 
