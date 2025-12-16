@@ -1,183 +1,82 @@
 # BinKit — The Binary Toolkit
 
-A monorepo for packaging precompiled native CLI tools for Node.js, with platform-specific binaries automatically loaded based on the current system.
+BinKit packages precompiled native CLI tools for Node.js. Install a tool, and the correct binary for your platform loads automatically.
+
+## Quick Start
+
+```bash
+npm install @binkit/android-platform-tools
+```
+
+```typescript
+import { adb, fastboot } from "@binkit/android-platform-tools";
+
+// Spawn async process
+const child = adb.spawn(["devices"]);
+child.stdout.on("data", (data) => console.log(data.toString()));
+
+// Spawn sync
+const result = adb.spawnSync(["--version"]);
+console.log(result.stdout.toString());
+
+// Exec sync
+const output = fastboot.execSync({ encoding: "utf-8" });
+```
+
+## Available Tools
+
+| Tool                   | Package                          | Description                      |
+| ---------------------- | -------------------------------- | -------------------------------- |
+| Android Platform Tools | `@binkit/android-platform-tools` | ADB, fastboot, and related tools |
 
 ## Features
 
-- **Cross-platform**: Automatically selects the right binary for your OS and architecture
-- **Type-safe**: Full TypeScript support with complete type definitions
-- **Modular**: Each tool is an independent package with platform-specific sub-packages
-- **ESM**: Pure ESM module format
-- **Generator**: Scaffold new tool packages with a single command
+- **Zero config**: Platform detection is automatic
+- **Type-safe**: Full TypeScript support
+- **Modular**: Only downloads binaries for your platform via `optionalDependencies`
+- **Pure ESM**: Modern module format
 
-## Project Structure
+## API
 
-```
-binkit/
-├── core/                        # binkit (private) - Core toolkit
-│   ├── src/                     # Platform detection, binary runner, generator
-│   ├── dist/                    # Compiled output
-│   └── package.json
-├── packages/                    # Generated tool packages (gitignored)
-│   ├── <tool>/                  # @binkit/<tool> - Publishable
-│   ├── <tool>-darwin-x64/       # @binkit/<tool>-darwin-x64
-│   ├── <tool>-darwin-arm64/     # @binkit/<tool>-darwin-arm64
-│   ├── <tool>-linux-x64/        # @binkit/<tool>-linux-x64
-│   ├── <tool>-linux-arm64/      # @binkit/<tool>-linux-arm64
-│   └── <tool>-win32-x64/        # @binkit/<tool>-win32-x64
-├── package.json                 # Workspace root (private)
-└── pnpm-workspace.yaml
-```
-
-## Getting Started
-
-### Installation
-
-```bash
-pnpm install
-```
-
-### Build All Packages
-
-```bash
-pnpm build
-```
-
-### Generate a New Tool
-
-Use the `binkit` CLI to generate packages for a new tool:
-
-```bash
-# Show help
-pnpm generate --help
-
-# Generate with default version (0.1.0)
-pnpm generate ffmpeg
-
-# Generate with specific version
-pnpm generate adb 1.0.0
-```
-
-Generated packages are placed in `packages/` (gitignored) and should be reviewed before publishing.
-
-## Usage
-
-Once published, users can install and use the tools:
-
-```bash
-npm install @binkit/ffmpeg
-```
+Each tool package exports `BinaryRunner` objects for its binaries:
 
 ```typescript
-import { runFfmpeg } from '@binkit/ffmpeg'
+interface BinaryRunner {
+  /** Path to the binary executable */
+  path: string;
 
-// Run ffmpeg with arguments
-const exitCode = await runFfmpeg({
-  args: ['-version'],
-  cwd: process.cwd(),
-})
+  /** Async spawn (same as child_process.spawn, without command arg) */
+  spawn(args?: string[], options?: SpawnOptions): ChildProcess;
 
-console.log('Exit code:', exitCode)
+  /** Sync spawn */
+  spawnSync(
+    args?: string[],
+    options?: SpawnSyncOptions
+  ): SpawnSyncReturns<Buffer>;
+
+  /** Async exec */
+  exec(options?: ExecOptions, callback?: ExecCallback): ChildProcess;
+
+  /** Sync exec */
+  execSync(options?: ExecSyncOptions): Buffer | string;
+}
 ```
 
-The main package automatically loads the correct platform-specific binary based on your system's OS and architecture.
-
-## Architecture
-
-### Core Package (binkit)
-
-An all-in-one private toolkit providing:
-
-- **Platform Detection**: Maps `process.platform` + `process.arch` to platform identifiers
-- **Binary Runner**: Executes binaries with proper environment variables (PATH, LD_LIBRARY_PATH, etc.)
-- **Package Generator**: Scaffolds new tool packages with TypeScript configs and build scripts
-- **CLI Tool**: `binkit` command for generating tool packages
-- **Type Definitions**: Shared types for tool configurations
-
-### Tool Packages
-
-Each tool (like `ffmpeg`) consists of:
-
-1. **Main Package** (`@binkit/ffmpeg`):
-   - Exports JS API
-   - Loads platform-specific binary at runtime
-   - Lists all platform packages as `optionalDependencies`
-
-2. **Platform Packages** (`@binkit/ffmpeg-<platform>`):
-   - Contains the actual binary for that platform
-   - Exports `binaryPath` and `libPath`
-   - Marked with `os` and `cpu` fields in package.json
-
-## Versioning Strategy
-
-BinKit packages follow a modified semver scheme to balance framework stability with binary updates:
-
-```
-{framework-major}.{binary-major}.{patch}
-```
-
-| Position | Meaning | Example |
-|----------|---------|---------|
-| **Major** | Framework breaking changes | `1.x.x` → `2.x.x` (runtime API change) |
-| **Minor** | Binary major version | `1.35.x` (upstream v35.x.x) |
-| **Patch** | Binary minor/patch or framework fixes | `1.35.1`, `1.35.2` |
-
-### Version Evolution Example
-
-```
-1.35.0  → Initial release (Android Platform Tools 35.0.0)
-1.35.1  → Binary 35.0.1 or framework bug fix
-1.35.2  → Binary 35.0.2 or framework bug fix
-1.36.0  → Binary 36.0.0 (upstream major upgrade)
-2.0.0   → Framework breaking change (e.g., runtime API change)
-```
-
-The `upstreamVersion` field in tool configs tracks the original binary version for reference.
-
-## Development
-
-### Setup (Fresh Clone)
-
-```bash
-git clone <repo>
-pnpm install         # Install generator/runtime dependencies
-pnpm build           # Build generator and runtime
-pnpm generate        # Generate packages/ directory
-pnpm install         # Link generated packages
-```
-
-**Note**: The `packages/` directory is gitignored. It's generated from `generator/src/tools/index.ts`.
-
-### Adding a New Tool
-
-1. Generate packages using the CLI:
-
-```bash
-pnpm generate mytool 1.0.0
-```
-
-2. Add real binaries to `packages/<tool>-<platform>/bin/`
-3. Add shared libraries to `packages/<tool>-<platform>/lib/`
-4. Build: `pnpm install && pnpm build`
-5. Publish: `pnpm -r publish --filter "./packages/*"`
-
-Or use the API programmatically:
+Example with `android-platform-tools`:
 
 ```typescript
-import { createToolConfig, generateToolPackages } from 'binkit'
+import { adb, fastboot } from "@binkit/android-platform-tools";
 
-const config = createToolConfig({ toolName: 'mytool', version: '1.0.0' })
-await generateToolPackages(config, { outputDir: './packages', force: true })
+// All exports are BinaryRunner objects
+adb.path; // '/path/to/node_modules/@binkit/.../vendor/adb'
+adb.spawnSync(["devices"]);
 ```
 
-**Note**: The `binkit` core package is private and not published. The `@binkit` scope is reserved for tool packages (like `@binkit/ffmpeg`).
+## Documentation
 
-### Scripts
-
-- `pnpm build` - Build all packages
-- `pnpm lint` - Run ESLint
-- `pnpm clean` - Remove all build artifacts
-- `pnpm generate <tool> [version]` - Generate tool packages using binkit CLI
+- [Product Overview](./docs/product.md) — Vision, use cases, and roadmap
+- [Technical Design](./docs/technical.md) — Architecture and implementation details
+- [Contributing](./docs/contributing.md) — How to add new tools
 
 ## License
 
