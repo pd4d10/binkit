@@ -39,15 +39,17 @@ function getExeExtension(): string {
 }
 
 /**
- * Extract specific binaries from a zip file
+ * Extract specific binaries and libs from a zip file
  * @param zipPath - Path to the zip file
  * @param destDir - Destination directory for binaries
  * @param binaryPaths - List of binary paths relative to zip root (e.g., "platform-tools/adb")
+ * @param libPaths - Optional list of library paths to extract alongside binaries (e.g., Windows DLLs)
  */
 export async function extractBinaries(
   zipPath: string,
   destDir: string,
-  binaryPaths: string[]
+  binaryPaths: string[],
+  libPaths?: string[]
 ): Promise<void> {
   console.log(`  📦 Extracting binaries from ${zipPath}...`)
 
@@ -95,7 +97,24 @@ export async function extractBinaries(
       await fs.chmod(destPath, 0o755)
     }
 
-    console.log(`  ✓ Extracted ${binaryPaths.length} binaries to ${destDir}`)
+    // Copy library files (e.g., Windows DLLs) to bin directory
+    if (libPaths && libPaths.length > 0) {
+      for (const libPath of libPaths) {
+        const srcPath = path.join(tempDir, libPath)
+        const filename = path.basename(libPath)
+        const destPath = path.join(destDir, filename)
+
+        if (await fs.access(srcPath).then(() => true).catch(() => false)) {
+          await fs.copyFile(srcPath, destPath)
+          console.log(`  ✓ Extracted lib: ${filename}`)
+        } else {
+          console.log(`  ⚠ Library not found: ${libPath}`)
+        }
+      }
+    }
+
+    const totalFiles = binaryPaths.length + (libPaths?.length ?? 0)
+    console.log(`  ✓ Extracted ${totalFiles} files to ${destDir}`)
   } finally {
     // Cleanup temp directory
     await fs.rm(tempDir, { recursive: true, force: true })
@@ -182,8 +201,11 @@ export async function downloadAndExtractPlatform(
   // Get binary paths from config
   const binaryPaths = config.binaries ?? [config.toolName]
 
-  // Extract binaries to bin directory
-  await extractBinaries(zipPath, binDir, binaryPaths)
+  // Get platform-specific library paths (e.g., Windows DLLs)
+  const libPaths = config.libs?.[platform.platformId]
+
+  // Extract binaries and libs to bin directory
+  await extractBinaries(zipPath, binDir, binaryPaths, libPaths)
 
   // Verify binaries if commands are provided
   if (verify && verify.length > 0) {
