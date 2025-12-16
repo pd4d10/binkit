@@ -60,8 +60,8 @@ export function generateMainPackageJson(config: ToolConfig): string {
 
   const optionalDependencies: Record<string, string> = {}
   for (const target of targets) {
-    // Use workspace protocol for workspace packages
-    optionalDependencies[target.npmPackageName] = 'workspace:*'
+    // Use version number directly - pnpm will use workspace symlinks when available
+    optionalDependencies[target.npmPackageName] = version
   }
 
   const pkg = {
