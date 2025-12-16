@@ -1,7 +1,7 @@
 import type { RegistryEntry } from '../types.js'
 
 export const androidPlatformTools: RegistryEntry = {
-  version: '1.35.0',
+  version: '0.0.1', // For testing purposes only
   upstreamVersion: '35.0.2',
   binaries: [
     'platform-tools/adb',
@@ -29,4 +29,3 @@ export const androidPlatformTools: RegistryEntry = {
     'make_f2fs_casefold -V',
   ],
 }
-

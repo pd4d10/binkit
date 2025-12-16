@@ -1,0 +1,192 @@
+# Release workflow for BinKit packages
+# Triggered by tags in format: <tool-name>@<version>
+# Example: android-platform-tools@1.35.0
+#
+# This workflow:
+# 1. Parses the tag to extract tool name and version
+# 2. Runs platform-specific jobs to generate, verify, and publish platform packages
+# 3. After all platform packages are published, publishes the main package
+#
+# Authentication: Uses npm Trusted Publishing (OIDC) - no secrets required!
+# Setup: Configure trusted publishers on npmjs.com for each package
+# See: https://docs.npmjs.com/generating-provenance-statements
+
+name: Release
+
+on:
+  push:
+    tags:
+      - "*@*"
+  # Allow manual trigger for testing
+  workflow_dispatch:
+    inputs:
+      tool-name:
+        description: "Tool name (e.g., android-platform-tools)"
+        required: true
+        type: string
+      version:
+        description: "Version (e.g., 1.35.0)"
+        required: true
+        type: string
+      dry-run:
+        description: "Dry run (skip actual publish)"
+        required: false
+        type: boolean
+        default: true
+
+jobs:
+  # Parse the tag to extract tool name and version
+  parse-tag:
+    runs-on: ubuntu-latest
+    outputs:
+      tool-name: ${{ steps.parse.outputs.tool-name }}
+      version: ${{ steps.parse.outputs.version }}
+      dry-run: ${{ steps.parse.outputs.dry-run }}
+    steps:
+      - name: Parse tag
+        id: parse
+        run: |
+          # Handle both tag push and manual dispatch
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TOOL_NAME="${{ inputs.tool-name }}"
+            VERSION="${{ inputs.version }}"
+            DRY_RUN="${{ inputs.dry-run }}"
+          else
+            TAG="${GITHUB_REF#refs/tags/}"
+            TOOL_NAME="${TAG%@*}"
+            VERSION="${TAG##*@}"
+            DRY_RUN="false"
+          fi
+
+          echo "tool-name=$TOOL_NAME" >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "dry-run=$DRY_RUN" >> $GITHUB_OUTPUT
+          echo "Parsed: tool=$TOOL_NAME, version=$VERSION, dry-run=$DRY_RUN"
+
+      - name: Validate inputs
+        run: |
+          TOOL_NAME="${{ steps.parse.outputs.tool-name }}"
+          VERSION="${{ steps.parse.outputs.version }}"
+
+          if [ -z "$TOOL_NAME" ] || [ -z "$VERSION" ]; then
+            echo "Error: tool-name and version are required"
+            exit 1
+          fi
+
+          # Validate version format (basic semver check)
+          if ! echo "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+'; then
+            echo "Error: version must be in semver format (e.g., 1.35.0)"
+            exit 1
+          fi
+
+          echo "✓ Inputs validated: $TOOL_NAME@$VERSION"
+
+  # Build, verify, and publish platform-specific packages
+  platform-packages:
+    needs: parse-tag
+    permissions:
+      contents: read
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: darwin-arm64
+            os: macos-14
+          - platform: darwin-x64
+            os: macos-13
+          - platform: linux-x64
+            os: ubuntu-latest
+          - platform: linux-arm64
+            os: ubuntu-24.04-arm
+          - platform: win32-x64
+            os: windows-latest
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Enable corepack
+        run: corepack enable
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "pnpm"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Build generator and runtime
+        run: pnpm build
+
+      - name: Generate platform package
+        run: pnpm generate ${{ needs.parse-tag.outputs.tool-name }} ${{ needs.parse-tag.outputs.version }} --download --current-platform
+
+      - name: Install generated packages
+        run: pnpm install
+
+      - name: Publish platform package
+        if: needs.parse-tag.outputs.dry-run != 'true'
+        run: |
+          cd packages/${{ needs.parse-tag.outputs.tool-name }}-${{ matrix.platform }}
+          npm publish --access public --provenance
+
+      - name: Dry run - skip publish
+        if: needs.parse-tag.outputs.dry-run == 'true'
+        run: |
+          echo "Dry run mode - skipping publish for ${{ needs.parse-tag.outputs.tool-name }}-${{ matrix.platform }}"
+          cd packages/${{ needs.parse-tag.outputs.tool-name }}-${{ matrix.platform }}
+          echo "Package contents:"
+          ls -la
+          ls -la bin/ || true
+
+  # Publish the main package after all platform packages are published
+  main-package:
+    needs: [parse-tag, platform-packages]
+    permissions:
+      contents: read
+      id-token: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Enable corepack
+        run: corepack enable
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "pnpm"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Build generator and runtime
+        run: pnpm build
+
+      - name: Generate main package only
+        run: pnpm generate ${{ needs.parse-tag.outputs.tool-name }} ${{ needs.parse-tag.outputs.version }}
+
+      - name: Install generated packages
+        run: pnpm install
+
+      - name: Publish main package
+        if: needs.parse-tag.outputs.dry-run != 'true'
+        run: |
+          cd packages/${{ needs.parse-tag.outputs.tool-name }}
+          npm publish --access public --provenance
+
+      - name: Dry run - skip publish
+        if: needs.parse-tag.outputs.dry-run == 'true'
+        run: |
+          echo "Dry run mode - skipping publish for main package ${{ needs.parse-tag.outputs.tool-name }}"
+          cd packages/${{ needs.parse-tag.outputs.tool-name }}
+          echo "Package contents:"
+          ls -la
+          cat package.json
