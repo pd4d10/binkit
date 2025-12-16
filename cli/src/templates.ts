@@ -102,7 +102,7 @@ export function generateMainIndexJs(config: ToolConfig): string {
     .map(
       (binary) => `/**
  * Binary runner for ${binary.name}.
- * Provides spawn, spawnSync, exec, execSync methods.
+ * Provides spawn and spawnSync methods.
  */
 export const ${binary.exportName} = createBinaryRunner(getBinaryPath('${binary.path}'));`
     )
@@ -110,12 +110,7 @@ export const ${binary.exportName} = createBinaryRunner(getBinaryPath('${binary.p
 
   return `import path from 'node:path';
 import { createRequire } from 'node:module';
-import {
-  spawn as nodeSpawn,
-  spawnSync as nodeSpawnSync,
-  exec as nodeExec,
-  execSync as nodeExecSync,
-} from 'node:child_process';
+import { spawn as nodeSpawn, spawnSync as nodeSpawnSync } from 'node:child_process';
 
 const require = createRequire(import.meta.url);
 
@@ -125,7 +120,7 @@ function getCurrentTarget() {
 
 function createBinaryRunner(binaryPath) {
   return {
-    path: binaryPath,
+    binaryPath,
 
     spawn(...params) {
       const isArgsArray = Array.isArray(params[0]);
@@ -139,18 +134,6 @@ function createBinaryRunner(binaryPath) {
       const args = isArgsArray ? params[0] : [];
       const opts = isArgsArray ? params[1] : params[0];
       return nodeSpawnSync(binaryPath, args, opts);
-    },
-
-    exec(...params) {
-      const isOptionsFirst = params[0] != null && typeof params[0] !== 'function';
-      const options = isOptionsFirst ? params[0] : undefined;
-      const cb = isOptionsFirst ? params[1] : params[0];
-      return nodeExec(binaryPath, options, cb);
-    },
-
-    execSync(...params) {
-      const options = params[0];
-      return nodeExecSync(binaryPath, options);
     },
   };
 }
@@ -214,7 +197,7 @@ export function generateMainIndexDts(config: ToolConfig): string {
     .map(
       (binary) => `/**
  * Binary runner for ${binary.name}.
- * Provides spawn, spawnSync, exec, execSync methods.
+ * Provides spawn and spawnSync methods.
  */
 export declare const ${binary.exportName}: BinaryRunner;`
     )
@@ -266,20 +249,14 @@ type OmitFirstFromOverloads<T> = UnionToIntersection<
  * but without the first command parameter (since it's already bound).
  */
 export interface BinaryRunner {
-  /** Path to the binary executable */
-  readonly path: string;
+  /** Full path to the binary executable */
+  readonly binaryPath: string;
 
   /** @see https://nodejs.org/api/child_process.html#child_processspawncommand-args-options */
   spawn: OmitFirstFromOverloads<typeof cp.spawn>;
 
   /** @see https://nodejs.org/api/child_process.html#child_processspawnsynccommand-args-options */
   spawnSync: OmitFirstFromOverloads<typeof cp.spawnSync>;
-
-  /** @see https://nodejs.org/api/child_process.html#child_processexeccommand-options-callback */
-  exec: OmitFirstFromOverloads<typeof cp.exec>;
-
-  /** @see https://nodejs.org/api/child_process.html#child_processexecsynccommand-options */
-  execSync: OmitFirstFromOverloads<typeof cp.execSync>;
 }
 
 // ============================================================================
@@ -351,10 +328,10 @@ export function generateMainTestJs(config: ToolConfig): string {
   const binaryTests = binaries
     .map(
       (binary) => `
-  await t.test('${binary.exportName}.path should be a valid path', () => {
-    assert.ok(${binary.exportName}.path, '${binary.exportName}.path should be defined');
-    assert.ok(typeof ${binary.exportName}.path === 'string', '${binary.exportName}.path should be a string');
-    assert.ok(${binary.exportName}.path.length > 0, '${binary.exportName}.path should not be empty');
+  await t.test('${binary.exportName}.binaryPath should be a valid path', () => {
+    assert.ok(${binary.exportName}.binaryPath, '${binary.exportName}.binaryPath should be defined');
+    assert.ok(typeof ${binary.exportName}.binaryPath === 'string', '${binary.exportName}.binaryPath should be a string');
+    assert.ok(${binary.exportName}.binaryPath.length > 0, '${binary.exportName}.binaryPath should not be empty');
   });
 
   await t.test('${binary.exportName}.spawnSync should execute successfully', () => {

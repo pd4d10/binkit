@@ -298,11 +298,9 @@ The runtime flow:
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                       BinaryRunner                                      │
 │  {                                                                      │
-│    path: '/node_modules/@binkit/.../vendor/adb',                       │
-│    spawn: (args, opts) => child_process.spawn(path, args, opts),       │
-│    spawnSync: (args, opts) => child_process.spawnSync(path, args, opts),
-│    exec: (opts, cb) => child_process.exec(path, opts, cb),             │
-│    execSync: (opts) => child_process.execSync(path, opts),             │
+│    binaryPath: '/node_modules/@binkit/.../vendor/adb',                 │
+│    spawn: (args, opts) => child_process.spawn(binaryPath, args, opts), │
+│    spawnSync: (args, opts) => child_process.spawnSync(binaryPath, ...),│
 │  }                                                                      │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
