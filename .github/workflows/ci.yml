@@ -34,6 +34,9 @@ jobs:
       - name: Lint
         run: pnpm lint
 
+      - name: Test check command
+        run: node cli/dist/cli.js check
+
   # Test package generation on each platform
   test-generate:
     needs: build
@@ -73,8 +76,10 @@ jobs:
 
       - name: Generate and download test package
         id: generate
+        shell: bash
         run: |
-          pnpm generate android-platform-tools --download --current-platform
+          # Test with the first version from android-platform-tools
+          node cli/dist/cli.js target android-platform-tools 35.0.2
           if [ -d "packages/android-platform-tools-${{ matrix.platform }}" ]; then
             echo "supported=true" >> $GITHUB_OUTPUT
           else
@@ -84,7 +89,7 @@ jobs:
 
       - name: Verify generated package
         if: steps.generate.outputs.supported == 'true'
+        shell: bash
         run: |
           ls -la packages/android-platform-tools-${{ matrix.platform }}/
-          ls -la packages/android-platform-tools-${{ matrix.platform }}/bin/
-        shell: bash
+          ls -la packages/android-platform-tools-${{ matrix.platform }}/vendor/

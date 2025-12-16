@@ -1,26 +1,34 @@
 import type { RegistryEntry } from '../types.js'
 
 export const androidPlatformTools: RegistryEntry = {
-  version: '0.0.6', // For testing purposes only
-  upstreamVersion: '35.0.2',
-  binaries: [
-    'platform-tools/adb',
-    'platform-tools/fastboot',
-    'platform-tools/etc1tool',
-    'platform-tools/hprof-conv',
-    'platform-tools/make_f2fs',
-    'platform-tools/make_f2fs_casefold',
-    'platform-tools/mke2fs',
-    'platform-tools/sqlite3',
+  versions: ['35.0.0'],
+  targets: [
+    { platform: 'darwin', arch: 'x64' },
+    { platform: 'darwin', arch: 'arm64' },
+    { platform: 'linux', arch: 'x64' },
+    { platform: 'win32', arch: 'x64' },
   ],
-  downloads: {
-    'darwin-x64': 'https://dl.google.com/android/repository/platform-tools-latest-darwin.zip',
-    'darwin-arm64': 'https://dl.google.com/android/repository/platform-tools-latest-darwin.zip',
-    'linux-x64': 'https://dl.google.com/android/repository/platform-tools-latest-linux.zip',
-    'win32-x64': 'https://dl.google.com/android/repository/platform-tools-latest-windows.zip',
+
+  getConfig: ({ version, platform }) => {
+    const osName = platform === 'win32' ? 'windows' : platform === 'linux' ? 'linux' : 'darwin'
+
+    return {
+      downloadUrl: `https://dl.google.com/android/repository/platform-tools_r${version}-${osName}.zip`,
+      stripPrefix: 'platform-tools',
+      binaries: [
+        'adb',
+        'fastboot',
+        'etc1tool',
+        'hprof-conv',
+        'make_f2fs',
+        'make_f2fs_casefold',
+        'mke2fs',
+        'sqlite3',
+      ],
+      verify: [
+        'adb --version',
+        'fastboot --version',
+      ],
+    }
   },
-  verify: [
-    'platform-tools/adb --version',
-    'platform-tools/fastboot --version',
-  ],
 }

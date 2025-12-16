@@ -1,106 +1,20 @@
-# Release workflow for BinKit packages
-# Triggered by tags in format: <tool-name>@<version>
-# Example: android-platform-tools@1.35.0
-#
-# This workflow:
-# 1. Parses the tag to extract tool name and version
-# 2. Runs platform-specific jobs to generate, verify, and publish platform packages
-# 3. After all platform packages are published, publishes the main package
-#
-# Authentication: Uses NPM_TOKEN secret (Granular Access Token with @binkit scope)
-# This allows publishing new packages without pre-configuring each one on npmjs.com
+# Release workflow - automatically publishes new versions to npm
+# Triggered on push to main or manually via workflow_dispatch
 
 name: Release
 
 on:
   push:
-    tags:
-      - "*@*"
-  # Allow manual trigger for testing
+    branches: [main]
   workflow_dispatch:
-    inputs:
-      tool-name:
-        description: "Tool name (e.g., android-platform-tools)"
-        required: true
-        type: string
-      version:
-        description: "Version (e.g., 1.35.0)"
-        required: true
-        type: string
-      dry-run:
-        description: "Dry run (skip actual publish)"
-        required: false
-        type: boolean
-        default: true
 
 jobs:
-  # Parse the tag to extract tool name and version
-  parse-tag:
+  # Check which versions need to be published
+  check:
     runs-on: ubuntu-latest
     outputs:
-      tool-name: ${{ steps.parse.outputs.tool-name }}
-      version: ${{ steps.parse.outputs.version }}
-      dry-run: ${{ steps.parse.outputs.dry-run }}
-    steps:
-      - name: Parse tag
-        id: parse
-        run: |
-          # Handle both tag push and manual dispatch
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            TOOL_NAME="${{ inputs.tool-name }}"
-            VERSION="${{ inputs.version }}"
-            DRY_RUN="${{ inputs.dry-run }}"
-          else
-            TAG="${GITHUB_REF#refs/tags/}"
-            TOOL_NAME="${TAG%@*}"
-            VERSION="${TAG##*@}"
-            DRY_RUN="false"
-          fi
-
-          echo "tool-name=$TOOL_NAME" >> $GITHUB_OUTPUT
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "dry-run=$DRY_RUN" >> $GITHUB_OUTPUT
-          echo "Parsed: tool=$TOOL_NAME, version=$VERSION, dry-run=$DRY_RUN"
-
-      - name: Validate inputs
-        run: |
-          TOOL_NAME="${{ steps.parse.outputs.tool-name }}"
-          VERSION="${{ steps.parse.outputs.version }}"
-
-          if [ -z "$TOOL_NAME" ] || [ -z "$VERSION" ]; then
-            echo "Error: tool-name and version are required"
-            exit 1
-          fi
-
-          # Validate version format (basic semver check)
-          if ! echo "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+'; then
-            echo "Error: version must be in semver format (e.g., 1.35.0)"
-            exit 1
-          fi
-
-          echo "✓ Inputs validated: $TOOL_NAME@$VERSION"
-
-  # Build, verify, and publish platform-specific packages
-  platform-packages:
-    needs: parse-tag
-    permissions:
-      contents: read
-      id-token: write
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - platform: darwin-arm64
-            os: macos-15
-          - platform: darwin-x64
-            os: macos-15-intel
-          - platform: linux-x64
-            os: ubuntu-24.04
-          - platform: linux-arm64
-            os: ubuntu-24.04-arm
-          - platform: win32-x64
-            os: windows-2025
-    runs-on: ${{ matrix.os }}
+      matrix: ${{ steps.check.outputs.matrix }}
+      has_unpublished: ${{ steps.check.outputs.has_unpublished }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -113,58 +27,40 @@ jobs:
         with:
           node-version: "22"
           cache: "pnpm"
-          registry-url: "https://registry.npmjs.org"
 
       - name: Install dependencies
         run: pnpm install
 
-      - name: Build generator and runtime
+      - name: Build
         run: pnpm build
 
-      - name: Generate platform package
-        id: generate
-        shell: bash
+      - name: Check for unpublished versions
+        id: check
         run: |
-          pnpm generate platform ${{ needs.parse-tag.outputs.tool-name }} ${{ needs.parse-tag.outputs.version }}
-          if [ -d "packages/${{ needs.parse-tag.outputs.tool-name }}-${{ matrix.platform }}" ]; then
-            echo "supported=true" >> $GITHUB_OUTPUT
+          OUTPUT=$(node cli/dist/cli.js check)
+          echo "$OUTPUT"
+
+          # Extract JSON from output
+          JSON=$(echo "$OUTPUT" | grep "UNPUBLISHED_JSON=" | sed 's/UNPUBLISHED_JSON=//')
+
+          if [ "$JSON" = "[]" ]; then
+            echo "has_unpublished=false" >> $GITHUB_OUTPUT
+            echo "matrix={\"include\":[]}" >> $GITHUB_OUTPUT
           else
-            echo "supported=false" >> $GITHUB_OUTPUT
-            echo "⚠️ Platform ${{ matrix.platform }} is not supported by ${{ needs.parse-tag.outputs.tool-name }}, skipping..."
+            echo "has_unpublished=true" >> $GITHUB_OUTPUT
+            # Convert to matrix format
+            MATRIX=$(echo "$JSON" | jq -c '{include: .}')
+            echo "matrix=$MATRIX" >> $GITHUB_OUTPUT
           fi
 
-      - name: Run tests
-        if: steps.generate.outputs.supported == 'true'
-        shell: bash
-        run: |
-          cd packages/${{ needs.parse-tag.outputs.tool-name }}
-          node --test dist/index.test.js
-
-      - name: Publish platform package
-        if: steps.generate.outputs.supported == 'true' && needs.parse-tag.outputs.dry-run != 'true'
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: |
-          cd packages/${{ needs.parse-tag.outputs.tool-name }}-${{ matrix.platform }}
-          pnpm publish --access public --no-git-checks
-
-      - name: Dry run - skip publish
-        if: steps.generate.outputs.supported == 'true' && needs.parse-tag.outputs.dry-run == 'true'
-        shell: bash
-        run: |
-          echo "Dry run mode - skipping publish for ${{ needs.parse-tag.outputs.tool-name }}-${{ matrix.platform }}"
-          cd packages/${{ needs.parse-tag.outputs.tool-name }}-${{ matrix.platform }}
-          echo "Package contents:"
-          ls -la
-          ls -la vendor/ || true
-
-  # Publish the main package after all platform packages are published
-  main-package:
-    needs: [parse-tag, platform-packages]
-    permissions:
-      contents: read
-      id-token: write
+  # Publish main package for each unpublished version
+  publish-main:
+    needs: check
+    if: needs.check.outputs.has_unpublished == 'true'
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.check.outputs.matrix) }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -182,33 +78,83 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
-      - name: Build generator and runtime
+      - name: Build
         run: pnpm build
 
       - name: Generate main package
-        run: pnpm generate main ${{ needs.parse-tag.outputs.tool-name }} ${{ needs.parse-tag.outputs.version }}
-
-      - name: Replace workspace protocol with actual version
         run: |
-          cd packages/${{ needs.parse-tag.outputs.tool-name }}
-          # Replace workspace:* with actual version in package.json
-          sed -i 's/"workspace:\*"/"${{ needs.parse-tag.outputs.version }}"/g' package.json
-          echo "Updated package.json:"
-          cat package.json
+          node cli/dist/cli.js main ${{ matrix.tool }} ${{ matrix.upstreamVersion }}
 
       - name: Publish main package
-        if: needs.parse-tag.outputs.dry-run != 'true'
+        run: |
+          cd packages/${{ matrix.tool }}
+          npm publish --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: |
-          cd packages/${{ needs.parse-tag.outputs.tool-name }}
-          pnpm publish --access public --no-git-checks
 
-      - name: Dry run - skip publish
-        if: needs.parse-tag.outputs.dry-run == 'true'
+  # Build and publish target packages on each platform
+  publish-targets:
+    needs: [check, publish-main]
+    if: needs.check.outputs.has_unpublished == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - id: darwin-arm64
+            os: macos-15
+          - id: darwin-x64
+            os: macos-13
+          - id: linux-x64
+            os: ubuntu-latest
+          - id: win32-x64
+            os: windows-latest
+    runs-on: ${{ matrix.target.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Enable corepack
+        run: corepack enable
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "pnpm"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Build
+        run: pnpm build
+
+      - name: Generate and publish target packages
+        shell: bash
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          UNPUBLISHED: ${{ needs.check.outputs.matrix }}
         run: |
-          echo "Dry run mode - skipping publish for main package ${{ needs.parse-tag.outputs.tool-name }}"
-          cd packages/${{ needs.parse-tag.outputs.tool-name }}
-          echo "Package contents:"
-          ls -la
-          cat package.json
+          # Parse the unpublished versions
+          TOOLS=$(echo "$UNPUBLISHED" | jq -r '.include[] | "\(.tool):\(.upstreamVersion)"')
+
+          for ENTRY in $TOOLS; do
+            TOOL=$(echo "$ENTRY" | cut -d: -f1)
+            VERSION=$(echo "$ENTRY" | cut -d: -f2)
+
+            echo "Processing $TOOL@$VERSION for target ${{ matrix.target.id }}..."
+
+            # Generate target package
+            node cli/dist/cli.js target "$TOOL" "$VERSION" || true
+
+            # Check if target package was generated
+            TARGET_DIR="packages/${TOOL}-${{ matrix.target.id }}"
+            if [ -d "$TARGET_DIR" ]; then
+              echo "Publishing $TARGET_DIR..."
+              cd "$TARGET_DIR"
+              npm publish --access public || echo "Failed to publish, may already exist"
+              cd ../..
+            else
+              echo "⚠️ Target ${{ matrix.target.id }} is not supported by $TOOL, skipping..."
+            fi
+          done

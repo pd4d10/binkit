@@ -4,7 +4,8 @@ import { createWriteStream } from 'node:fs'
 import { pipeline } from 'node:stream/promises'
 import { exec, spawn } from 'node:child_process'
 import { promisify } from 'node:util'
-import type { PlatformConfig, ToolConfig } from './config.js'
+import type { TargetConfig, ToolConfig } from './config.js'
+import { getTargetId } from './config.js'
 import type { VerifyCommands } from 'binkit-registry'
 
 const execAsync = promisify(exec)
@@ -25,7 +26,6 @@ export async function downloadFile(url: string, destPath: string): Promise<void>
   }
 
   const fileStream = createWriteStream(destPath)
-  // @ts-ignore Node.js stream compatibility
   await pipeline(response.body, fileStream)
 
   console.log(`  ✓ Downloaded to ${destPath}`)
@@ -43,11 +43,13 @@ function getExeExtension(): string {
  * @param zipPath - Path to the zip file
  * @param vendorDir - Destination vendor directory
  * @param binaryPaths - List of binary paths to make executable (relative to vendor dir)
+ * @param stripPrefix - Optional prefix to strip from extracted paths
  */
 export async function extractToVendor(
   zipPath: string,
   vendorDir: string,
-  binaryPaths: string[]
+  binaryPaths: string[],
+  stripPrefix?: string
 ): Promise<void> {
   console.log(`  📦 Extracting to ${vendorDir}...`)
 
@@ -59,6 +61,16 @@ export async function extractToVendor(
     } else {
       // Use unzip on macOS/Linux
       await execAsync(`unzip -o -q "${zipPath}" -d "${vendorDir}"`)
+    }
+
+    // If stripPrefix is set, move contents from prefix dir to vendor root
+    if (stripPrefix) {
+      const prefixDir = path.join(vendorDir, stripPrefix)
+      const entries = await fs.readdir(prefixDir)
+      for (const entry of entries) {
+        await fs.rename(path.join(prefixDir, entry), path.join(vendorDir, entry))
+      }
+      await fs.rmdir(prefixDir)
     }
 
     // Make binaries executable
@@ -148,16 +160,16 @@ export async function verifyBinaries(
 }
 
 /**
- * Download and extract files for a platform
+ * Download and extract files for a target
  */
-export async function downloadAndExtractPlatform(
+export async function downloadAndExtractTarget(
   config: ToolConfig,
-  platform: PlatformConfig,
+  target: TargetConfig,
   packageDir: string,
   verify?: VerifyCommands
 ): Promise<void> {
-  if (!platform.download?.url) {
-    console.log(`  ⚠ No download URL for ${platform.platformId}, skipping download`)
+  if (!target.download?.url) {
+    console.log(`  ⚠ No download URL for ${getTargetId(target)}, skipping download`)
     return
   }
 
@@ -167,13 +179,13 @@ export async function downloadAndExtractPlatform(
   const zipPath = path.join(packageDir, 'download.zip')
 
   // Download the zip file
-  await downloadFile(platform.download.url, zipPath)
+  await downloadFile(target.download.url, zipPath)
 
   // Get binary paths from config
-  const binaryPaths = config.binaries ?? [config.toolName]
+  const binaryPaths = config.binaries ?? [config.name]
 
   // Extract all files to vendor directory
-  await extractToVendor(zipPath, vendorDir, binaryPaths)
+  await extractToVendor(zipPath, vendorDir, binaryPaths, config.stripPrefix)
 
   // Verify binaries if commands are provided
   if (verify && verify.length > 0) {

@@ -7,7 +7,7 @@
     "build": "pnpm -r run build",
     "clean": "pnpm -r run clean",
     "lint": "eslint .",
-    "generate": "node generator/dist/cli.js"
+    "generate": "node cli/dist/cli.js"
   },
   "keywords": [
     "binkit",
@@ -18,10 +18,10 @@
   "author": "Rongjian Zhang <pd4d10@gmail.com>",
   "license": "MIT",
   "devDependencies": {
-    "@typescript-eslint/eslint-plugin": "^8.18.1",
-    "@typescript-eslint/parser": "^8.18.1",
+    "@eslint/js": "^9.39.2",
     "eslint": "^9.15.0",
-    "typescript": "^5.7.2"
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.50.0"
   },
   "packageManager": "pnpm@10.25.0+sha256.0f3726654b0b5e52e5800904de168afc3c667e2abf84bdb06d9ac1386104bd90"
 }

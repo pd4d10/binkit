@@ -1,9 +1,5 @@
-import { AUTHOR, LICENSE, type ToolConfig, type PlatformConfig } from './config.js'
-
-function parsePlatform(platformId: string): { os: string; arch: string } {
-  const [os, arch] = platformId.split('-')
-  return { os, arch }
-}
+import { AUTHOR, LICENSE, SCOPE } from './constants.js'
+import { type ToolConfig, type TargetConfig, getTargetId } from './config.js'
 
 /**
  * Convert a binary name to camelCase export name
@@ -48,9 +44,9 @@ function getBinaries(config: ToolConfig): BinaryInfo[] {
   }
   // Default: single binary with the tool name
   return [{
-    path: config.toolName,
-    name: config.toolName,
-    exportName: toCamelCase(config.toolName),
+    path: config.name,
+    name: config.name,
+    exportName: toCamelCase(config.name),
   }]
 }
 
@@ -59,19 +55,20 @@ function getBinaries(config: ToolConfig): BinaryInfo[] {
  * No build scripts or typescript - dist files are pre-compiled
  */
 export function generateMainPackageJson(config: ToolConfig): string {
-  const { toolName, scope, version, platforms } = config
-  const packageName = `${scope}/${toolName}`
+  const { name, version, upstreamVersion, targets } = config
+  const packageName = `${SCOPE}/${name}`
 
   const optionalDependencies: Record<string, string> = {}
-  for (const platform of platforms) {
+  for (const target of targets) {
     // Use workspace protocol for workspace packages
-    optionalDependencies[platform.npmPackageName] = 'workspace:*'
+    optionalDependencies[target.npmPackageName] = 'workspace:*'
   }
 
   const pkg = {
     name: packageName,
     version,
-    description: `BinKit ${toolName} - Cross-platform ${toolName} binary`,
+    upstreamVersion,
+    description: `BinKit ${name} - Cross-platform ${name} binary`,
     type: 'module',
     main: './dist/index.js',
     types: './dist/index.d.ts',
@@ -82,7 +79,7 @@ export function generateMainPackageJson(config: ToolConfig): string {
       },
     },
     files: ['dist'],
-    keywords: ['binkit', toolName, 'binary', 'cli'],
+    keywords: ['binkit', name, 'binary', 'cli'],
     author: AUTHOR,
     license: LICENSE,
     optionalDependencies,
@@ -97,7 +94,7 @@ export function generateMainPackageJson(config: ToolConfig): string {
  * Runtime code is bundled inline to avoid version mismatch issues
  */
 export function generateMainIndexJs(config: ToolConfig): string {
-  const { toolName, platforms } = config
+  const { name, targets } = config
   const binaries = getBinaries(config)
 
   // Generate exports for each binary
@@ -122,7 +119,7 @@ import {
 
 const require = createRequire(import.meta.url);
 
-function getCurrentPlatform() {
+function getCurrentTarget() {
   return \`\${process.platform}-\${process.arch}\`;
 }
 
@@ -159,20 +156,20 @@ function createBinaryRunner(binaryPath) {
 }
 
 /**
- * Get the vendor directory for the current platform
+ * Get the vendor directory for the current target
  * @returns Path to the vendor directory
  */
 function getVendorDir() {
-  const platformId = getCurrentPlatform();
-  const platformPackages = {
-${platforms.map((p) => `    '${p.platformId}': '${p.npmPackageName}',`).join('\n')}
+  const targetId = getCurrentTarget();
+  const targetPackages = {
+${targets.map((t) => `    '${getTargetId(t)}': '${t.npmPackageName}',`).join('\n')}
   };
 
-  const packageName = platformPackages[platformId];
+  const packageName = targetPackages[targetId];
   if (!packageName) {
     throw new Error(
-      \`${capitalize(toolName)} binaries not found for platform: \${platformId}.\\n\` +
-      \`Supported platforms: \${Object.keys(platformPackages).join(', ')}\`
+      \`${capitalize(name)} binaries not found for target: \${targetId}.\\n\` +
+      \`Supported targets: \${Object.keys(targetPackages).join(', ')}\`
     );
   }
 
@@ -181,8 +178,8 @@ ${platforms.map((p) => `    '${p.platformId}': '${p.npmPackageName}',`).join('\n
     return path.join(path.dirname(packageJsonPath), 'vendor');
   } catch (error) {
     throw new Error(
-      \`${capitalize(toolName)} binaries not found for platform: \${platformId}.\\n\` +
-      \`Please ensure the platform-specific package is installed: \${packageName}\\n\` +
+      \`${capitalize(name)} binaries not found for target: \${targetId}.\\n\` +
+      \`Please ensure the target-specific package is installed: \${packageName}\\n\` +
       \`If you're using npm/pnpm, optional dependencies might not have been installed.\\n\` +
       \`Try installing manually: npm install \${packageName}\\n\` +
       \`Error: \${error instanceof Error ? error.message : String(error)}\`
@@ -294,24 +291,24 @@ ${exportDeclarations}
 }
 
 /**
- * Generate package.json for a platform-specific package
- * Platform packages are just binary containers - no JS code needed
+ * Generate package.json for a target-specific package
+ * Target packages are just binary containers - no JS code needed
  */
-export function generatePlatformPackageJson(
+export function generateTargetPackageJson(
   config: ToolConfig,
-  platform: PlatformConfig
+  target: TargetConfig
 ): string {
-  const { toolName, version } = config
-  const { os, arch } = parsePlatform(platform.platformId)
+  const { name, version } = config
+  const { platform, arch } = target
 
   const pkg = {
-    name: platform.npmPackageName,
+    name: target.npmPackageName,
     version,
-    description: `${capitalize(toolName)} binary for ${os}-${arch}`,
+    description: `${capitalize(name)} binary for ${platform}-${arch}`,
     files: ['vendor'],
-    os: [os],
+    os: [platform],
     cpu: [arch],
-    keywords: ['binkit', toolName, 'binary', os, arch],
+    keywords: ['binkit', name, 'binary', platform, arch],
     author: AUTHOR,
     license: LICENSE,
   }
@@ -320,18 +317,18 @@ export function generatePlatformPackageJson(
 }
 
 /**
- * Generate README.md for a platform-specific package
+ * Generate README.md for a target-specific package
  */
-export function generatePlatformReadme(
+export function generateTargetReadme(
   config: ToolConfig,
-  platform: PlatformConfig
+  target: TargetConfig
 ): string {
-  const { toolName, scope } = config
-  const mainPackageName = `${scope}/${toolName}`
+  const { name } = config
+  const mainPackageName = `${SCOPE}/${name}`
 
-  return `# ${platform.npmPackageName}
+  return `# ${target.npmPackageName}
 
-This is a platform-specific binary package for [${mainPackageName}](https://www.npmjs.com/package/${mainPackageName}).
+This is a target-specific binary package for [${mainPackageName}](https://www.npmjs.com/package/${mainPackageName}).
 
 **Do not install this package directly.** Instead, install the main package:
 
@@ -339,7 +336,7 @@ This is a platform-specific binary package for [${mainPackageName}](https://www.
 npm install ${mainPackageName}
 \`\`\`
 
-The main package will automatically select and install the correct binary for your platform.
+The main package will automatically select and install the correct binary for your target.
 `
 }
 
@@ -375,7 +372,7 @@ export function generateMainTestJs(config: ToolConfig): string {
 import assert from 'node:assert';
 import { ${imports} } from './index.js';
 
-test('${config.toolName} binaries', async (t) => {
+test('${config.name} binaries', async (t) => {
 ${binaryTests}
 });
 `

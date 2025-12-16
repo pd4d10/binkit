@@ -1,21 +1,22 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { execSync } from 'node:child_process'
-import type { ToolConfig, PlatformConfig } from './config.js'
+import type { ToolConfig } from './config.js'
+import { getTargetId } from './config.js'
 import {
   generateMainPackageJson,
   generateMainIndexJs,
   generateMainIndexDts,
   generateMainTestJs,
-  generatePlatformPackageJson,
-  generatePlatformReadme,
+  generateTargetPackageJson,
+  generateTargetReadme,
 } from './templates.js'
-import { downloadAndExtractPlatform } from './download.js'
+import { downloadAndExtractTarget } from './download.js'
 
 /**
- * Get the current platform identifier
+ * Get the current target identifier
  */
-export function getCurrentPlatform(): string {
+export function getCurrentTarget(): string {
   return `${process.platform}-${process.arch}`
 }
 
@@ -27,10 +28,10 @@ export async function generateMain(
   config: ToolConfig,
   outputDir = './packages'
 ): Promise<void> {
-  console.log(`Generating main package for ${config.toolName}...`)
+  console.log(`Generating main package for ${config.name}...`)
 
-  const { toolName } = config
-  const packageDir = path.join(outputDir, toolName)
+  const { name } = config
+  const packageDir = path.join(outputDir, name)
 
   // Clean and recreate package directory
   await cleanDir(packageDir)
@@ -43,34 +44,34 @@ export async function generateMain(
   await writeFile(path.join(packageDir, 'dist', 'index.d.ts'), generateMainIndexDts(config))
   await writeFile(path.join(packageDir, 'dist', 'index.test.js'), generateMainTestJs(config))
 
-  console.log(`✓ Generated main package: ${toolName}`)
+  console.log(`✓ Generated main package: ${name}`)
 }
 
 /**
- * Generate platform package, download binaries, and run tests
- * Used by CI on each platform runner
+ * Generate target package, download binaries, and run tests
+ * Used by CI on each target runner
  */
-export async function generatePlatform(
+export async function generateTarget(
   config: ToolConfig,
   outputDir = './packages'
 ): Promise<void> {
-  const currentPlatform = getCurrentPlatform()
-  const platform = config.platforms.find((p) => p.platformId === currentPlatform)
+  const currentTarget = getCurrentTarget()
+  const target = config.targets.find((t) => getTargetId(t) === currentTarget)
 
-  if (!platform) {
-    console.log(`⚠ Platform ${currentPlatform} is not configured for ${config.toolName}`)
+  if (!target) {
+    console.log(`⚠ Target ${currentTarget} is not configured for ${config.name}`)
     return
   }
 
-  if (!platform.download?.url) {
-    console.log(`⚠ No download URL configured for ${currentPlatform}`)
+  if (!target.download?.url) {
+    console.log(`⚠ No download URL configured for ${currentTarget}`)
     return
   }
 
-  console.log(`Generating platform package for ${config.toolName} (${currentPlatform})...`)
+  console.log(`Generating target package for ${config.name} (${currentTarget})...`)
 
   // Generate main package (needed for workspace and tests)
-  const mainPackageDir = path.join(outputDir, config.toolName)
+  const mainPackageDir = path.join(outputDir, config.name)
   await cleanDir(mainPackageDir)
   await ensureDir(mainPackageDir)
   await ensureDir(path.join(mainPackageDir, 'dist'))
@@ -78,31 +79,31 @@ export async function generatePlatform(
   await writeFile(path.join(mainPackageDir, 'dist', 'index.js'), generateMainIndexJs(config))
   await writeFile(path.join(mainPackageDir, 'dist', 'index.d.ts'), generateMainIndexDts(config))
   await writeFile(path.join(mainPackageDir, 'dist', 'index.test.js'), generateMainTestJs(config))
-  console.log(`  ✓ Generated main package: ${config.toolName}`)
+  console.log(`  ✓ Generated main package: ${config.name}`)
 
-  // Generate platform package
-  const platformPackageName = `${config.toolName}-${currentPlatform}`
-  const platformPackageDir = path.join(outputDir, platformPackageName)
+  // Generate target package
+  const targetPackageName = `${config.name}-${currentTarget}`
+  const targetPackageDir = path.join(outputDir, targetPackageName)
 
-  await cleanDir(platformPackageDir)
-  await ensureDir(platformPackageDir)
-  await ensureDir(path.join(platformPackageDir, 'vendor'))
+  await cleanDir(targetPackageDir)
+  await ensureDir(targetPackageDir)
+  await ensureDir(path.join(targetPackageDir, 'vendor'))
 
   await writeFile(
-    path.join(platformPackageDir, 'package.json'),
-    generatePlatformPackageJson(config, platform)
+    path.join(targetPackageDir, 'package.json'),
+    generateTargetPackageJson(config, target)
   )
-  await writeFile(path.join(platformPackageDir, 'README.md'), generatePlatformReadme(config, platform))
-  console.log(`  ✓ Generated platform package: ${platformPackageName}`)
+  await writeFile(path.join(targetPackageDir, 'README.md'), generateTargetReadme(config, target))
+  console.log(`  ✓ Generated target package: ${targetPackageName}`)
 
   // Download and extract binaries
-  await downloadAndExtractPlatform(config, platform, platformPackageDir, config.verify)
+  await downloadAndExtractTarget(config, target, targetPackageDir, config.verify)
 
   // Install workspace dependencies
   console.log('  📦 Installing workspace dependencies...')
   execSync('pnpm install --force', { cwd: outputDir, stdio: 'inherit' })
 
-  console.log(`✓ Successfully generated platform package for ${currentPlatform}`)
+  console.log(`✓ Successfully generated target package for ${currentTarget}`)
 }
 
 /**

@@ -21,5 +21,8 @@
     "tools"
   ],
   "author": "Rongjian Zhang <pd4d10@gmail.com>",
-  "license": "MIT"
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^22.19.1"
+  }
 }
