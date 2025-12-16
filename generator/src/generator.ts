@@ -6,6 +6,7 @@ import {
   generateMainIndexJs,
   generateMainIndexDts,
   generatePlatformPackageJson,
+  generatePlatformReadme,
 } from './templates.js'
 import { downloadAndExtractPlatform } from './download.js'
 
@@ -53,9 +54,16 @@ export async function generateToolPackages(
       continue
     }
 
+    // Skip platforms without download URL when download is requested
+    // This prevents creating empty platform packages for unsupported platforms
+    if (download && !platform.download?.url) {
+      console.log(`  ⚠ Skipping ${platform.platformId}: no download URL configured`)
+      continue
+    }
+
     await generatePlatformPackage(config, platform, outputDir, force)
 
-    // Download binaries if requested and download URL is configured
+    // Download binaries if requested
     if (download && platform.download?.url) {
       const packageDir = path.join(outputDir, `${config.toolName}-${platform.platformId}`)
       await downloadAndExtractPlatform(config, platform, packageDir, config.verify)
@@ -123,10 +131,16 @@ async function generatePlatformPackage(
   await ensureDir(path.join(packageDir, 'bin'))
   await ensureDir(path.join(packageDir, 'lib'))
 
-  // Generate package.json only
+  // Generate package.json and README
   await writeFile(
     path.join(packageDir, 'package.json'),
     generatePlatformPackageJson(config, platform),
+    force
+  )
+
+  await writeFile(
+    path.join(packageDir, 'README.md'),
+    generatePlatformReadme(config, platform),
     force
   )
 

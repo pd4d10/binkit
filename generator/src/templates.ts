@@ -217,6 +217,30 @@ export function generatePlatformPackageJson(
 }
 
 /**
+ * Generate README.md for a platform-specific package
+ */
+export function generatePlatformReadme(
+  config: ToolConfig,
+  platform: PlatformConfig
+): string {
+  const { toolName, scope } = config
+  const mainPackageName = `${scope}/${toolName}`
+
+  return `# ${platform.npmPackageName}
+
+This is a platform-specific binary package for [${mainPackageName}](https://www.npmjs.com/package/${mainPackageName}).
+
+**Do not install this package directly.** Instead, install the main package:
+
+\`\`\`bash
+npm install ${mainPackageName}
+\`\`\`
+
+The main package will automatically select and install the correct binary for your platform.
+`
+}
+
+/**
  * Capitalize first letter of a string
  */
 function capitalize(str: string): string {

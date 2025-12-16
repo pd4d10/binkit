@@ -1,7 +1,7 @@
 import type { RegistryEntry } from '../types.js'
 
 export const androidPlatformTools: RegistryEntry = {
-  version: '0.0.3', // For testing purposes only
+  version: '0.0.4', // For testing purposes only
   upstreamVersion: '35.0.2',
   binaries: [
     'platform-tools/adb',
