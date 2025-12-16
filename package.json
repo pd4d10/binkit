@@ -4,8 +4,8 @@
   "type": "module",
   "description": "The Binary Toolkit - Precompiled native CLI tools for Node.js",
   "scripts": {
-    "build": "pnpm -r run build",
-    "clean": "pnpm -r run clean",
+    "build": "tsc --build",
+    "clean": "tsc --build --clean && rm -rf cli/dist registry/dist",
     "lint": "eslint .",
     "generate": "node cli/dist/cli.js"
   },

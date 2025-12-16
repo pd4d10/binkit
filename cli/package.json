@@ -6,10 +6,6 @@
   "bin": {
     "binkit": "./dist/cli.js"
   },
-  "scripts": {
-    "build": "tsc",
-    "clean": "rm -rf dist"
-  },
   "keywords": [
     "binkit",
     "cli"

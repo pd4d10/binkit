@@ -11,10 +11,6 @@
       "default": "./dist/index.js"
     }
   },
-  "scripts": {
-    "build": "tsc",
-    "clean": "rm -rf dist"
-  },
   "keywords": [
     "binkit",
     "registry",
