@@ -11,7 +11,7 @@ const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'))
 export const AUTHOR: string = pkg.author;
 export const LICENSE: string = pkg.license;
 
-import type { VerifyCommands } from '@binkit/registry'
+import type { VerifyCommands } from 'binkit-registry'
 
 type PlatformId = string
 
@@ -55,11 +55,9 @@ export interface ToolConfig {
   version: string
   /** List of supported platforms */
   platforms: PlatformConfig[]
-  /** List of binary names (for tools with multiple binaries like android-platform-tools) */
+  /** List of binary paths relative to zip root (e.g., "platform-tools/adb") */
   binaries?: BinaryName[]
-  /** Platform-specific library files to extract alongside binaries (e.g., Windows DLLs) */
-  libs?: Record<string, string[]>
-  /** Verification commands to run after download, e.g. ['adb --version'] */
+  /** Verification commands to run after download, e.g. ['platform-tools/adb --version'] */
   verify?: VerifyCommands
 }
 
@@ -68,13 +66,11 @@ export interface CreateToolConfigOptions {
   toolName: string
   /** Package version (default: 0.1.0) */
   version?: string
-  /** List of binary names for tools with multiple binaries */
+  /** List of binary paths relative to zip root (e.g., "platform-tools/adb") */
   binaries?: BinaryName[]
   /** Download URLs per platform (keyed by platformId) */
   downloads?: Record<string, PlatformDownload>
-  /** Platform-specific library files to extract alongside binaries (e.g., Windows DLLs) */
-  libs?: Record<string, string[]>
-  /** Verification commands to run after download, e.g. ['adb --version'] */
+  /** Verification commands to run after download, e.g. ['platform-tools/adb --version'] */
   verify?: VerifyCommands
 }
 
@@ -84,7 +80,7 @@ export interface CreateToolConfigOptions {
  * @returns ToolConfig with common platforms
  */
 export function createToolConfig(options: CreateToolConfigOptions): ToolConfig {
-  const { toolName, version = '0.1.0', binaries, downloads, libs, verify } = options
+  const { toolName, version = '0.1.0', binaries, downloads, verify } = options
   const scope = '@binkit'
 
   const platformIds = ['darwin-x64', 'darwin-arm64', 'linux-x64', 'linux-arm64', 'win32-x64']
@@ -101,7 +97,6 @@ export function createToolConfig(options: CreateToolConfigOptions): ToolConfig {
     version,
     platforms,
     binaries,
-    libs,
     verify,
   }
 }

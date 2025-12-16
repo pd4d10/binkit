@@ -1,7 +1,7 @@
 import type { RegistryEntry } from '../types.js'
 
 export const androidPlatformTools: RegistryEntry = {
-  version: '0.0.5', // For testing purposes only
+  version: '0.0.6', // For testing purposes only
   upstreamVersion: '35.0.2',
   binaries: [
     'platform-tools/adb',
@@ -19,16 +19,8 @@ export const androidPlatformTools: RegistryEntry = {
     'linux-x64': 'https://dl.google.com/android/repository/platform-tools-latest-linux.zip',
     'win32-x64': 'https://dl.google.com/android/repository/platform-tools-latest-windows.zip',
   },
-  libs: {
-    // Windows binaries require these DLLs to be present alongside the executables
-    'win32-x64': [
-      'platform-tools/AdbWinApi.dll',
-      'platform-tools/AdbWinUsbApi.dll',
-      'platform-tools/libwinpthread-1.dll',
-    ],
-  },
   verify: [
-    'adb --version',
-    'fastboot --version',
+    'platform-tools/adb --version',
+    'platform-tools/fastboot --version',
   ],
 }

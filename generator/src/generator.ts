@@ -1,150 +1,108 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
+import { execSync } from 'node:child_process'
 import type { ToolConfig, PlatformConfig } from './config.js'
 import {
   generateMainPackageJson,
   generateMainIndexJs,
   generateMainIndexDts,
+  generateMainTestJs,
   generatePlatformPackageJson,
   generatePlatformReadme,
 } from './templates.js'
 import { downloadAndExtractPlatform } from './download.js'
 
-export interface GenerateOptions {
-  /** Root directory where packages should be generated (default: './packages') */
-  outputDir?: string
-  /** Whether to overwrite existing files (default: false) */
-  force?: boolean
-  /** Whether to download binaries (default: false) */
-  download?: boolean
-  /** Only download for the current platform (default: false) */
-  currentPlatformOnly?: boolean
-}
-
 /**
  * Get the current platform identifier
  */
-function getCurrentPlatform(): string {
+export function getCurrentPlatform(): string {
   return `${process.platform}-${process.arch}`
 }
 
 /**
- * Generate all packages for a tool
+ * Generate the main tool package only
+ * Used by CI to publish main package separately
  */
-export async function generateToolPackages(
+export async function generateMain(
   config: ToolConfig,
-  options: GenerateOptions = {}
+  outputDir = './packages'
 ): Promise<void> {
-  const { outputDir = './packages', force = false, download = false, currentPlatformOnly = false } = options
+  console.log(`Generating main package for ${config.toolName}...`)
 
-  console.log(`Generating packages for ${config.toolName}...`)
-
-  // Ensure output directory exists
-  await ensureDir(outputDir)
-
-  // Generate main package
-  await generateMainPackage(config, outputDir, force)
-
-  const currentPlatform = getCurrentPlatform()
-
-  // Generate platform packages
-  for (const platform of config.platforms) {
-    // Skip platforms that don't match current if currentPlatformOnly is true
-    if (currentPlatformOnly && platform.platformId !== currentPlatform) {
-      continue
-    }
-
-    // Skip platforms without download URL when download is requested
-    // This prevents creating empty platform packages for unsupported platforms
-    if (download && !platform.download?.url) {
-      console.log(`  ⚠ Skipping ${platform.platformId}: no download URL configured`)
-      continue
-    }
-
-    await generatePlatformPackage(config, platform, outputDir, force)
-
-    // Download binaries if requested
-    if (download && platform.download?.url) {
-      const packageDir = path.join(outputDir, `${config.toolName}-${platform.platformId}`)
-      await downloadAndExtractPlatform(config, platform, packageDir, config.verify)
-    }
-  }
-
-  console.log(`✓ Successfully generated packages for ${config.toolName}`)
-}
-
-/**
- * Generate the main tool package
- */
-async function generateMainPackage(
-  config: ToolConfig,
-  outputDir: string,
-  force: boolean
-): Promise<void> {
   const { toolName } = config
   const packageDir = path.join(outputDir, toolName)
 
-  // Create directory structure
+  // Clean and recreate package directory
+  await cleanDir(packageDir)
   await ensureDir(packageDir)
   await ensureDir(path.join(packageDir, 'dist'))
 
   // Generate files
-  await writeFile(
-    path.join(packageDir, 'package.json'),
-    generateMainPackageJson(config),
-    force
-  )
+  await writeFile(path.join(packageDir, 'package.json'), generateMainPackageJson(config))
+  await writeFile(path.join(packageDir, 'dist', 'index.js'), generateMainIndexJs(config))
+  await writeFile(path.join(packageDir, 'dist', 'index.d.ts'), generateMainIndexDts(config))
+  await writeFile(path.join(packageDir, 'dist', 'index.test.js'), generateMainTestJs(config))
 
-  // Write pre-compiled JavaScript and type definitions
-  await writeFile(
-    path.join(packageDir, 'dist', 'index.js'),
-    generateMainIndexJs(config),
-    force
-  )
-
-  await writeFile(
-    path.join(packageDir, 'dist', 'index.d.ts'),
-    generateMainIndexDts(config),
-    force
-  )
-
-  console.log(`  ✓ Generated main package: ${toolName}`)
+  console.log(`✓ Generated main package: ${toolName}`)
 }
 
 /**
- * Generate a platform-specific package
- * Platform packages are just binary containers - no JS code needed
+ * Generate platform package, download binaries, and run tests
+ * Used by CI on each platform runner
  */
-async function generatePlatformPackage(
+export async function generatePlatform(
   config: ToolConfig,
-  platform: PlatformConfig,
-  outputDir: string,
-  force: boolean
+  outputDir = './packages'
 ): Promise<void> {
-  const { toolName } = config
-  const platformSuffix = platform.platformId
-  const packageName = `${toolName}-${platformSuffix}`
-  const packageDir = path.join(outputDir, packageName)
+  const currentPlatform = getCurrentPlatform()
+  const platform = config.platforms.find((p) => p.platformId === currentPlatform)
 
-  // Create directory structure (bin and lib for binaries)
-  await ensureDir(packageDir)
-  await ensureDir(path.join(packageDir, 'bin'))
-  await ensureDir(path.join(packageDir, 'lib'))
+  if (!platform) {
+    console.log(`⚠ Platform ${currentPlatform} is not configured for ${config.toolName}`)
+    return
+  }
 
-  // Generate package.json and README
+  if (!platform.download?.url) {
+    console.log(`⚠ No download URL configured for ${currentPlatform}`)
+    return
+  }
+
+  console.log(`Generating platform package for ${config.toolName} (${currentPlatform})...`)
+
+  // Generate main package (needed for workspace and tests)
+  const mainPackageDir = path.join(outputDir, config.toolName)
+  await cleanDir(mainPackageDir)
+  await ensureDir(mainPackageDir)
+  await ensureDir(path.join(mainPackageDir, 'dist'))
+  await writeFile(path.join(mainPackageDir, 'package.json'), generateMainPackageJson(config))
+  await writeFile(path.join(mainPackageDir, 'dist', 'index.js'), generateMainIndexJs(config))
+  await writeFile(path.join(mainPackageDir, 'dist', 'index.d.ts'), generateMainIndexDts(config))
+  await writeFile(path.join(mainPackageDir, 'dist', 'index.test.js'), generateMainTestJs(config))
+  console.log(`  ✓ Generated main package: ${config.toolName}`)
+
+  // Generate platform package
+  const platformPackageName = `${config.toolName}-${currentPlatform}`
+  const platformPackageDir = path.join(outputDir, platformPackageName)
+
+  await cleanDir(platformPackageDir)
+  await ensureDir(platformPackageDir)
+  await ensureDir(path.join(platformPackageDir, 'vendor'))
+
   await writeFile(
-    path.join(packageDir, 'package.json'),
-    generatePlatformPackageJson(config, platform),
-    force
+    path.join(platformPackageDir, 'package.json'),
+    generatePlatformPackageJson(config, platform)
   )
+  await writeFile(path.join(platformPackageDir, 'README.md'), generatePlatformReadme(config, platform))
+  console.log(`  ✓ Generated platform package: ${platformPackageName}`)
 
-  await writeFile(
-    path.join(packageDir, 'README.md'),
-    generatePlatformReadme(config, platform),
-    force
-  )
+  // Download and extract binaries
+  await downloadAndExtractPlatform(config, platform, platformPackageDir, config.verify)
 
-  console.log(`  ✓ Generated platform package: ${packageName}`)
+  // Install workspace dependencies
+  console.log('  📦 Installing workspace dependencies...')
+  execSync('pnpm install --force', { cwd: outputDir, stdio: 'inherit' })
+
+  console.log(`✓ Successfully generated platform package for ${currentPlatform}`)
 }
 
 /**
@@ -155,22 +113,19 @@ async function ensureDir(dir: string): Promise<void> {
 }
 
 /**
+ * Clean a directory (remove if exists)
+ */
+async function cleanDir(dir: string): Promise<void> {
+  try {
+    await fs.rm(dir, { recursive: true, force: true })
+  } catch {
+    // Directory doesn't exist, ignore
+  }
+}
+
+/**
  * Write a file
  */
-async function writeFile(
-  filePath: string,
-  content: string,
-  force: boolean
-): Promise<void> {
-  const exists = await fs
-    .access(filePath)
-    .then(() => true)
-    .catch(() => false)
-
-  if (exists && !force) {
-    console.log(`  ⚠ Skipping existing file: ${filePath}`)
-    return
-  }
-
+async function writeFile(filePath: string, content: string): Promise<void> {
   await fs.writeFile(filePath, content, 'utf-8')
 }

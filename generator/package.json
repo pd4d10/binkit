@@ -1,6 +1,5 @@
 {
-  "name": "@binkit/generator",
-  "version": "0.1.0",
+  "name": "binkit-generator",
   "private": true,
   "description": "BinKit generator for creating cross-platform native CLI packages",
   "type": "module",
@@ -19,7 +18,7 @@
   "author": "Rongjian Zhang <pd4d10@gmail.com>",
   "license": "MIT",
   "dependencies": {
-    "@binkit/registry": "workspace:*"
+    "binkit-registry": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.10.1"

@@ -7,5 +7,7 @@ node_modules/
 # Build outputs
 dist/
 
-# Generated packages (source of truth is generator/)
-packages/
+# Generated packages (source of truth is registry/)
+# Keep workspace files, ignore generated tool packages
+packages/*/
+packages/pnpm-lock.yaml

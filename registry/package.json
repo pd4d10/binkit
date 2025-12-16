@@ -1,6 +1,5 @@
 {
-  "name": "@binkit/registry",
-  "version": "0.1.0",
+  "name": "binkit-registry",
   "private": true,
   "description": "BinKit tool registry - configurations for all supported tools",
   "type": "module",
@@ -24,4 +23,3 @@
   "author": "Rongjian Zhang <pd4d10@gmail.com>",
   "license": "MIT"
 }
-

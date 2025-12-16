@@ -17,8 +17,6 @@ export interface RegistryEntry {
   binaries: string[]
   /** Download URLs keyed by platformId */
   downloads: Record<string, string>
-  /** Platform-specific library files to extract alongside binaries (e.g., Windows DLLs) */
-  libs?: Record<string, string[]>
-  /** Verification commands to run after download, e.g. ['adb --version'] */
+  /** Verification commands to run after download, e.g. ['platform-tools/adb --version'] */
   verify?: VerifyCommands
 }

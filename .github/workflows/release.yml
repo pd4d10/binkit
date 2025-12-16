@@ -125,7 +125,7 @@ jobs:
         id: generate
         shell: bash
         run: |
-          pnpm generate ${{ needs.parse-tag.outputs.tool-name }} ${{ needs.parse-tag.outputs.version }} --download --current-platform
+          pnpm generate platform ${{ needs.parse-tag.outputs.tool-name }} ${{ needs.parse-tag.outputs.version }}
           if [ -d "packages/${{ needs.parse-tag.outputs.tool-name }}-${{ matrix.platform }}" ]; then
             echo "supported=true" >> $GITHUB_OUTPUT
           else
@@ -133,9 +133,12 @@ jobs:
             echo "⚠️ Platform ${{ matrix.platform }} is not supported by ${{ needs.parse-tag.outputs.tool-name }}, skipping..."
           fi
 
-      - name: Install generated packages
+      - name: Run tests
         if: steps.generate.outputs.supported == 'true'
-        run: pnpm install --no-frozen-lockfile
+        shell: bash
+        run: |
+          cd packages/${{ needs.parse-tag.outputs.tool-name }}
+          node --test dist/index.test.js
 
       - name: Publish platform package
         if: steps.generate.outputs.supported == 'true' && needs.parse-tag.outputs.dry-run != 'true'
@@ -143,7 +146,7 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           cd packages/${{ needs.parse-tag.outputs.tool-name }}-${{ matrix.platform }}
-          npm publish --access public
+          pnpm publish --access public --no-git-checks
 
       - name: Dry run - skip publish
         if: steps.generate.outputs.supported == 'true' && needs.parse-tag.outputs.dry-run == 'true'
@@ -153,7 +156,7 @@ jobs:
           cd packages/${{ needs.parse-tag.outputs.tool-name }}-${{ matrix.platform }}
           echo "Package contents:"
           ls -la
-          ls -la bin/ || true
+          ls -la vendor/ || true
 
   # Publish the main package after all platform packages are published
   main-package:
@@ -182,11 +185,16 @@ jobs:
       - name: Build generator and runtime
         run: pnpm build
 
-      - name: Generate main package only
-        run: pnpm generate ${{ needs.parse-tag.outputs.tool-name }} ${{ needs.parse-tag.outputs.version }}
+      - name: Generate main package
+        run: pnpm generate main ${{ needs.parse-tag.outputs.tool-name }} ${{ needs.parse-tag.outputs.version }}
 
-      - name: Install generated packages
-        run: pnpm install --no-frozen-lockfile
+      - name: Replace workspace protocol with actual version
+        run: |
+          cd packages/${{ needs.parse-tag.outputs.tool-name }}
+          # Replace workspace:* with actual version in package.json
+          sed -i 's/"workspace:\*"/"${{ needs.parse-tag.outputs.version }}"/g' package.json
+          echo "Updated package.json:"
+          cat package.json
 
       - name: Publish main package
         if: needs.parse-tag.outputs.dry-run != 'true'
@@ -194,7 +202,7 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           cd packages/${{ needs.parse-tag.outputs.tool-name }}
-          npm publish --access public
+          pnpm publish --access public --no-git-checks
 
       - name: Dry run - skip publish
         if: needs.parse-tag.outputs.dry-run == 'true'

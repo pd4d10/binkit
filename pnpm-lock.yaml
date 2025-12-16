@@ -23,7 +23,7 @@ importers:
 
   generator:
     dependencies:
-      '@binkit/registry':
+      binkit-registry:
         specifier: workspace:*
         version: link:../registry
     devDependencies:
@@ -32,12 +32,6 @@ importers:
         version: 22.19.1
 
   registry: {}
-
-  runtime:
-    devDependencies:
-      '@types/node':
-        specifier: ^22.10.1
-        version: 22.19.1
 
 packages:
 
