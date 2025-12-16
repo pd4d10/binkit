@@ -42,13 +42,15 @@ jobs:
       matrix:
         include:
           - platform: darwin-arm64
-            os: macos-14
+            os: macos-15
           - platform: darwin-x64
-            os: macos-13
+            os: macos-15-intel
           - platform: linux-x64
-            os: ubuntu-latest
+            os: ubuntu-24.04
+          - platform: linux-arm64
+            os: ubuntu-24.04-arm
           - platform: win32-x64
-            os: windows-latest
+            os: windows-2025
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
@@ -70,9 +72,18 @@ jobs:
         run: pnpm build
 
       - name: Generate and download test package
-        run: pnpm generate android-platform-tools --download --current-platform
+        id: generate
+        run: |
+          pnpm generate android-platform-tools --download --current-platform
+          if [ -d "packages/android-platform-tools-${{ matrix.platform }}" ]; then
+            echo "supported=true" >> $GITHUB_OUTPUT
+          else
+            echo "supported=false" >> $GITHUB_OUTPUT
+            echo "⚠️ Platform ${{ matrix.platform }} is not supported by android-platform-tools, skipping..."
+          fi
 
       - name: Verify generated package
+        if: steps.generate.outputs.supported == 'true'
         run: |
           ls -la packages/android-platform-tools-${{ matrix.platform }}/
           ls -la packages/android-platform-tools-${{ matrix.platform }}/bin/

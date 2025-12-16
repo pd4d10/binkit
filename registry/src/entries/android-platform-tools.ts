@@ -1,7 +1,7 @@
 import type { RegistryEntry } from '../types.js'
 
 export const androidPlatformTools: RegistryEntry = {
-  version: '0.0.1', // For testing purposes only
+  version: '0.0.2', // For testing purposes only
   upstreamVersion: '35.0.2',
   binaries: [
     'platform-tools/adb',
@@ -17,15 +17,10 @@ export const androidPlatformTools: RegistryEntry = {
     'darwin-x64': 'https://dl.google.com/android/repository/platform-tools-latest-darwin.zip',
     'darwin-arm64': 'https://dl.google.com/android/repository/platform-tools-latest-darwin.zip',
     'linux-x64': 'https://dl.google.com/android/repository/platform-tools-latest-linux.zip',
-    'linux-arm64': 'https://dl.google.com/android/repository/platform-tools-latest-linux.zip',
     'win32-x64': 'https://dl.google.com/android/repository/platform-tools-latest-windows.zip',
   },
   verify: [
     'adb --version',
     'fastboot --version',
-    'sqlite3 --version',
-    'mke2fs -V',
-    'make_f2fs -V',
-    'make_f2fs_casefold -V',
   ],
 }

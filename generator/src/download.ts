@@ -32,6 +32,13 @@ export async function downloadFile(url: string, destPath: string): Promise<void>
 }
 
 /**
+ * Get the executable extension for the current platform
+ */
+function getExeExtension(): string {
+  return process.platform === 'win32' ? '.exe' : ''
+}
+
+/**
  * Extract specific binaries from a zip file
  * @param zipPath - Path to the zip file
  * @param destDir - Destination directory for binaries
@@ -48,26 +55,43 @@ export async function extractBinaries(
   const tempDir = path.join(destDir, '.temp-extract')
   await fs.mkdir(tempDir, { recursive: true })
 
+  const exeExt = getExeExtension()
+
   try {
-    // Use unzip command (available on macOS/Linux, requires installation on Windows)
-    await execAsync(`unzip -o -q "${zipPath}" -d "${tempDir}"`)
+    // Use platform-appropriate unzip command
+    if (process.platform === 'win32') {
+      // Use PowerShell's Expand-Archive on Windows
+      await execAsync(`powershell -Command "Expand-Archive -Path '${zipPath}' -DestinationPath '${tempDir}' -Force"`)
+    } else {
+      // Use unzip on macOS/Linux
+      await execAsync(`unzip -o -q "${zipPath}" -d "${tempDir}"`)
+    }
 
     // Copy specified binaries to destDir
     for (const binaryPath of binaryPaths) {
-      const srcPath = path.join(tempDir, binaryPath)
-      const filename = path.basename(binaryPath)
-      const destPath = path.join(destDir, filename)
+      // On Windows, try with .exe extension first
+      const srcPathWithExt = path.join(tempDir, binaryPath + exeExt)
+      const srcPathWithoutExt = path.join(tempDir, binaryPath)
 
-      // Check if source exists
-      const exists = await fs.access(srcPath).then(() => true).catch(() => false)
-      if (!exists) {
+      const filename = path.basename(binaryPath)
+      const destPath = path.join(destDir, filename + exeExt)
+
+      // Check if source exists (with extension first, then without)
+      let srcPath: string | null = null
+      if (await fs.access(srcPathWithExt).then(() => true).catch(() => false)) {
+        srcPath = srcPathWithExt
+      } else if (await fs.access(srcPathWithoutExt).then(() => true).catch(() => false)) {
+        srcPath = srcPathWithoutExt
+      }
+
+      if (!srcPath) {
         console.log(`  ⚠ Binary not found: ${binaryPath}`)
         continue
       }
 
       // Copy file
       await fs.copyFile(srcPath, destPath)
-      // Make binary executable
+      // Make binary executable (no-op on Windows but doesn't hurt)
       await fs.chmod(destPath, 0o755)
     }
 
@@ -110,9 +134,11 @@ export async function verifyBinaries(
 ): Promise<void> {
   console.log(`  🔍 Verifying binaries...`)
 
+  const exeExt = getExeExtension()
+
   for (const command of commands) {
     const [binaryName, ...args] = command.split(' ')
-    const binaryPath = path.join(binDir, binaryName)
+    const binaryPath = path.join(binDir, binaryName + exeExt)
 
     // Check if binary exists
     const exists = await fs.access(binaryPath).then(() => true).catch(() => false)
